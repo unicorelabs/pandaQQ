@@ -25,6 +25,10 @@ object NativeAudioEngine {
     external fun nativeGetChannelMeterDb(channelIdx: Int): Float
     external fun nativeSetVocalFxMacro(intensity: Float)
     external fun nativeSetAutoCarve(enabled: Boolean)
+    external fun nativeSetReverbEnabled(enabled: Boolean)
+    external fun nativeSetDelayEnabled(enabled: Boolean)
+    external fun nativeSetHarmonizerEnabled(enabled: Boolean)
+    external fun nativeSetSubBoosterEnabled(enabled: Boolean)
 
     fun initialize(sampleRate: Float = 48000.0f, maxFrames: Int = 256) {
         nativeInit(sampleRate, maxFrames)
@@ -34,3 +38,4 @@ object NativeAudioEngine {
         nativeLoadPreset(preset.rawValue)
     }
 }
+

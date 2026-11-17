@@ -22,3 +22,4 @@ target_link_libraries(onlive_audio_jni
     ${log-lib}
     ${android-lib}
 )
+

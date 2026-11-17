@@ -89,9 +89,22 @@ int main() {
     assert(engine.getVocalChannel().isMuted() == false);
     std::cout << "[PASS] Channel MUTE and SOLO controls verified.\n";
 
+    // 6. Test Quick Send FX & Sub Booster Toggles
+    engine.setHarmonizerEnabled(true);
+    assert(engine.isHarmonizerEnabled() == true);
+    engine.setHarmonizerEnabled(false);
+    assert(engine.isHarmonizerEnabled() == false);
+
+    engine.setSubBoosterEnabled(true);
+    assert(engine.isSubBoosterEnabled() == true);
+    engine.setSubBoosterEnabled(false);
+    assert(engine.isSubBoosterEnabled() == false);
+    std::cout << "[PASS] Quick Send FX & Sub Booster Toggles verified.\n";
+
     std::cout << "=========================================================\n";
     std::cout << "  ALL ONLIVE DSP AUDIO ENGINE TESTS PASSED PERFECTLY!    \n";
     std::cout << "=========================================================\n";
 
     return 0;
 }
+

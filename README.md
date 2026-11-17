@@ -79,3 +79,4 @@ cmake --build build
 - [Technical Blueprint Architecture](docs/technical_blueprint_architecture.md)
 - [Product Requirements Document (PRD)](docs/prd_live_karaoke_daw.md)
 - [Agent Hard-Rules & UI/UX Design System Specification](docs/agent_hard_rules_and_ui_ux_spec.md)
+

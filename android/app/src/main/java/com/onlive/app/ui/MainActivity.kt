@@ -55,6 +55,12 @@ fun LiveKaraokeConsoleScreen() {
     var isAutoCarveActive by remember { mutableStateOf(true) }
     var isAutoTuneActive by remember { mutableStateOf(false) }
 
+    // Quick Send FX & Booster Toggles
+    var isReverbActive by remember { mutableStateOf(true) }
+    var isDelayActive by remember { mutableStateOf(true) }
+    var isHarmoniActive by remember { mutableStateOf(false) }
+    var isSubBoosterActive by remember { mutableStateOf(true) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -119,24 +125,90 @@ fun LiveKaraokeConsoleScreen() {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .padding(horizontal = 8.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             PresetButton("🎤 SAPA", selectedPreset == NativeAudioEngine.Preset.TALK_CHITCHAT, Modifier.weight(1f)) {
                 selectedPreset = NativeAudioEngine.Preset.TALK_CHITCHAT
                 NativeAudioEngine.loadPreset(it)
+                isReverbActive = false
+                isDelayActive = false
+                isHarmoniActive = false
+                isSubBoosterActive = false
             }
             PresetButton("✨ POP", selectedPreset == NativeAudioEngine.Preset.POP_STUDIO, Modifier.weight(1f)) {
                 selectedPreset = NativeAudioEngine.Preset.POP_STUDIO
                 NativeAudioEngine.loadPreset(it)
+                isReverbActive = true
+                isDelayActive = true
+                isHarmoniActive = false
+                isSubBoosterActive = true
             }
             PresetButton("🎸 AKUSTIK", selectedPreset == NativeAudioEngine.Preset.ACOUSTIC_WARM, Modifier.weight(1f)) {
                 selectedPreset = NativeAudioEngine.Preset.ACOUSTIC_WARM
                 NativeAudioEngine.loadPreset(it)
+                isReverbActive = true
+                isDelayActive = false
+                isHarmoniActive = false
+                isSubBoosterActive = false
             }
             PresetButton("💃 DANGDUT", selectedPreset == NativeAudioEngine.Preset.DANGDUT_MELAYU, Modifier.weight(1f)) {
                 selectedPreset = NativeAudioEngine.Preset.DANGDUT_MELAYU
                 NativeAudioEngine.loadPreset(it)
+                isReverbActive = true
+                isDelayActive = true
+                isHarmoniActive = false
+                isSubBoosterActive = true
+            }
+        }
+
+        // ========================================================
+        // 2B. QUICK FX SWITCH STRIP (TOMBOL CEPAT PENGAKTIF EFEK)
+        // ========================================================
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            QuickFxPill(
+                title = "✨ REVERB",
+                isActive = isReverbActive,
+                activeColor = AccentCyan,
+                modifier = Modifier.weight(1f)
+            ) {
+                isReverbActive = !isReverbActive
+                NativeAudioEngine.nativeSetReverbEnabled(isReverbActive)
+            }
+
+            QuickFxPill(
+                title = "🔁 DELAY",
+                isActive = isDelayActive,
+                activeColor = Color(0xFF00E676),
+                modifier = Modifier.weight(1f)
+            ) {
+                isDelayActive = !isDelayActive
+                NativeAudioEngine.nativeSetDelayEnabled(isDelayActive)
+            }
+
+            QuickFxPill(
+                title = "👥 HARMONI",
+                isActive = isHarmoniActive,
+                activeColor = AccentPurple,
+                modifier = Modifier.weight(1f)
+            ) {
+                isHarmoniActive = !isHarmoniActive
+                NativeAudioEngine.nativeSetHarmonizerEnabled(isHarmoniActive)
+            }
+
+            QuickFxPill(
+                title = "🔊 SUB BASS",
+                isActive = isSubBoosterActive,
+                activeColor = AccentAmber,
+                modifier = Modifier.weight(1f)
+            ) {
+                isSubBoosterActive = !isSubBoosterActive
+                NativeAudioEngine.nativeSetSubBoosterEnabled(isSubBoosterActive)
             }
         }
 
@@ -233,6 +305,51 @@ fun LiveKaraokeConsoleScreen() {
                 color = TextMuted,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
+@Composable
+fun QuickFxPill(
+    title: String,
+    isActive: Boolean,
+    activeColor: Color,
+    modifier: Modifier,
+    onClick: () -> Unit
+) {
+    Button(
+        onClick = onClick,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (isActive) activeColor.copy(alpha = 0.25f) else ChannelChassis
+        ),
+        shape = RoundedCornerShape(6.dp),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (isActive) activeColor else Color.DarkGray
+        ),
+        contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp),
+        modifier = modifier.height(28.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            // Illuminated LED Dot
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .background(
+                        if (isActive) activeColor else Color.Gray.copy(alpha = 0.4f),
+                        androidx.compose.foundation.shape.CircleShape
+                    )
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = title,
+                color = if (isActive) Color.White else TextMuted,
+                fontSize = 9.sp,
+                fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
             )
         }
     }
@@ -380,3 +497,4 @@ fun ChannelFaderStrip(
         }
     }
 }
+

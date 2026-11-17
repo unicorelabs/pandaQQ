@@ -140,6 +140,10 @@ void AudioEngine::loadFactoryPreset(FactoryPreset preset) noexcept {
             m_deEsser.setEnabled(true);
             m_vocalCompressor.setParameters(-16.0f, 2.5f, 10.0f, 100.0f, 4.0f, m_sampleRate);
             // Mute all effects for crystal clear speaking
+            m_reverbEnabled = false;
+            m_delayEnabled = false;
+            m_harmonizerEnabled = false;
+            m_chorusEnabled = false;
             m_vocalChannel.setSendLevel(0, 0.0f);
             m_vocalChannel.setSendLevel(1, 0.0f);
             m_vocalChannel.setSendLevel(2, 0.0f);
@@ -197,10 +201,10 @@ void AudioEngine::processAudio(const float* micInput, const float* musicInputL, 
     // ========================================================
     // 2. PARALLEL SEND FX PROCESSING
     // ========================================================
-    const float sendReverb = m_vocalChannel.getSendLevel(0);
-    const float sendDelay  = m_vocalChannel.getSendLevel(1);
-    const float sendHarm   = m_vocalChannel.getSendLevel(2);
-    const float sendChorus = m_vocalChannel.getSendLevel(3);
+    const float sendReverb = m_reverbEnabled ? m_vocalChannel.getSendLevel(0) : 0.0f;
+    const float sendDelay  = m_delayEnabled ? m_vocalChannel.getSendLevel(1) : 0.0f;
+    const float sendHarm   = m_harmonizerEnabled ? (m_vocalChannel.getSendLevel(2) > 0.05f ? m_vocalChannel.getSendLevel(2) : 0.45f) : 0.0f;
+    const float sendChorus = m_chorusEnabled ? (m_vocalChannel.getSendLevel(3) > 0.05f ? m_vocalChannel.getSendLevel(3) : 0.35f) : 0.0f;
 
     if (sendReverb > 0.001f) {
         m_reverb.processStereo(m_scratchVocalDry.data(), m_scratchFxL.data(), m_scratchFxR.data(), frames, sendReverb);

@@ -77,6 +77,22 @@ public:
     // Macro FX Control
     void setVocalFxMacro(float intensity) noexcept; // 0.0 to 1.0 (Controls Reverb + Delay together)
 
+    // Quick Send FX & Enhancer On/Off Toggles
+    void setReverbEnabled(bool enabled) noexcept { m_reverbEnabled = enabled; }
+    bool isReverbEnabled() const noexcept { return m_reverbEnabled; }
+
+    void setDelayEnabled(bool enabled) noexcept { m_delayEnabled = enabled; }
+    bool isDelayEnabled() const noexcept { return m_delayEnabled; }
+
+    void setHarmonizerEnabled(bool enabled) noexcept { m_harmonizerEnabled = enabled; }
+    bool isHarmonizerEnabled() const noexcept { return m_harmonizerEnabled; }
+
+    void setChorusEnabled(bool enabled) noexcept { m_chorusEnabled = enabled; }
+    bool isChorusEnabled() const noexcept { return m_chorusEnabled; }
+
+    void setSubBoosterEnabled(bool enabled) noexcept { m_subHarmonic.setEnabled(enabled); }
+    bool isSubBoosterEnabled() const noexcept { return m_subHarmonic.isEnabled(); }
+
     // Sidechain & Carve Toggles
     void setAutoCarveEnabled(bool enabled) noexcept { m_dynamicSidechain.setEnabled(enabled); }
     bool isAutoCarveEnabled() const noexcept { return m_dynamicSidechain.isEnabled(); }
@@ -113,6 +129,11 @@ private:
     Harmonizer m_harmonizer;
     Chorus m_chorus;
 
+    bool m_reverbEnabled{true};
+    bool m_delayEnabled{true};
+    bool m_harmonizerEnabled{false}; // Off by default, 1-tap to engage in chorus/reff!
+    bool m_chorusEnabled{false};
+
     // Master Finalizer
     TruePeakLimiter m_masterLimiter;
 
@@ -126,3 +147,4 @@ private:
 };
 
 } // namespace OnLive::DSP
+

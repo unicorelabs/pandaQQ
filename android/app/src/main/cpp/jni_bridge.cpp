@@ -97,4 +97,41 @@ Java_com_onlive_app_audio_NativeAudioEngine_nativeSetAutoCarve(JNIEnv* env, jobj
     }
 }
 
+JNIEXPORT void JNICALL
+Java_com_onlive_app_audio_NativeAudioEngine_nativeSetReverbEnabled(JNIEnv* env, jobject thiz, jboolean enabled) {
+    (void)env;
+    (void)thiz;
+    if (g_audioEngine) {
+        g_audioEngine->setReverbEnabled(enabled);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_onlive_app_audio_NativeAudioEngine_nativeSetDelayEnabled(JNIEnv* env, jobject thiz, jboolean enabled) {
+    (void)env;
+    (void)thiz;
+    if (g_audioEngine) {
+        g_audioEngine->setDelayEnabled(enabled);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_onlive_app_audio_NativeAudioEngine_nativeSetHarmonizerEnabled(JNIEnv* env, jobject thiz, jboolean enabled) {
+    (void)env;
+    (void)thiz;
+    if (g_audioEngine) {
+        g_audioEngine->setHarmonizerEnabled(enabled);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_onlive_app_audio_NativeAudioEngine_nativeSetSubBoosterEnabled(JNIEnv* env, jobject thiz, jboolean enabled) {
+    (void)env;
+    (void)thiz;
+    if (g_audioEngine) {
+        g_audioEngine->setSubBoosterEnabled(enabled);
+    }
+}
+
 } // extern "C"
+
