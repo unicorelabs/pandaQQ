@@ -28,3 +28,12 @@ target_link_libraries(test_dsp_engine PRIVATE
     onlive_dsp
 )
 
+# Stress & Benchmark Executable
+add_executable(stress_and_benchmark_test
+    src/tests/stress_and_benchmark_test.cpp
+)
+
+target_link_libraries(stress_and_benchmark_test PRIVATE
+    onlive_dsp
+)
+
