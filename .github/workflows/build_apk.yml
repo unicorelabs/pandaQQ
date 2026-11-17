@@ -42,3 +42,4 @@ jobs:
           name: PandaQQ-Debug-APK
           path: android/app/build/outputs/apk/debug/*.apk
           retention-days: 14
+

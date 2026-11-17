@@ -73,3 +73,4 @@ File APK akan langsung tercipta di:
 - **Application ID / Package**: `com.pandaqq.livekaraoke`
 - **App Icon**: Panda lucu memakai headphone studio DJ dengan aksen neon cyan/amber (sudah dibuatkan di semua resolusi Android `mdpi` hingga `xxxhdpi`).
 - **Versi**: `1.0.0`
+

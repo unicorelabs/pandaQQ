@@ -1,22 +1,43 @@
 package com.onlive.app.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import com.onlive.app.R
 import com.onlive.app.audio.NativeAudioEngine
+import kotlinx.coroutines.delay
 
 // Pro Studio Theme Color Palette
 val StudioBackground = Color(0xFF121316)
@@ -25,6 +46,7 @@ val AccentCyan = Color(0xFF00D2FF)
 val AccentAmber = Color(0xFFFF9900)
 val AccentPurple = Color(0xFF9D00FF)
 val AccentRed = Color(0xFFFF1744)
+val AccentPink = Color(0xFFFF4081)
 val TextMuted = Color(0xFF8E94A0)
 
 class MainActivity : ComponentActivity() {
@@ -35,15 +57,150 @@ class MainActivity : ComponentActivity() {
         NativeAudioEngine.initialize(48000.0f, 256)
 
         setContent {
-            LiveKaraokeConsoleScreen()
+            var showSplash by remember { mutableStateOf(true) }
+
+            LaunchedEffect(Unit) {
+                delay(2200) // Display splash screen for 2.2 seconds
+                showSplash = false
+            }
+
+            Box(modifier = Modifier.fillMaxSize()) {
+                LiveKaraokeConsoleScreen()
+
+                AnimatedVisibility(
+                    visible = showSplash,
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
+                    PandaSplashScreen(onDismiss = { showSplash = false })
+                }
+            }
         }
     }
 }
 
+/**
+ * ========================================================
+ * SPLASH SCREEN: PANDA HEADPHONE LOGO & BRANDING
+ * ========================================================
+ */
+@Composable
+fun PandaSplashScreen(onDismiss: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(Color(0xFF0A0B0E), Color(0xFF161820), Color(0xFF0A0B0E))
+                )
+            )
+            .clickable { onDismiss() },
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(24.dp)
+        ) {
+            // Glowing Circular Border around Panda Icon
+            Box(
+                modifier = Modifier
+                    .size(140.dp)
+                    .clip(CircleShape)
+                    .border(
+                        3.dp,
+                        Brush.sweepGradient(
+                            colors = listOf(AccentCyan, AccentAmber, AccentPurple, AccentCyan)
+                        ),
+                        CircleShape
+                    )
+                    .background(Color(0xFF14161D)),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_panda_logo),
+                    contentDescription = "Panda QQ Logo",
+                    modifier = Modifier
+                        .size(125.dp)
+                        .clip(CircleShape)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // App Title
+            Text(
+                text = "Panda QQ",
+                fontSize = 32.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = Color.White,
+                letterSpacing = 2.sp
+            )
+
+            // Subtitle
+            Text(
+                text = "LIVE KARAOKE DAW & BROADCAST SUITE",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = AccentCyan,
+                letterSpacing = 1.5.sp,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "Studio Sound for TikTok • Zero Latency • DSP Engine",
+                fontSize = 10.sp,
+                color = TextMuted
+            )
+
+            Spacer(modifier = Modifier.height(36.dp))
+
+            // Loading Indicator
+            CircularProgressIndicator(
+                color = AccentAmber,
+                strokeWidth = 2.dp,
+                modifier = Modifier.size(24.dp)
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = "Memuat Preset Studio & DSP...",
+                fontSize = 10.sp,
+                color = TextMuted
+            )
+        }
+
+        // Version & Developer credit at bottom
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = 20.dp),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            Text(
+                text = "v1.0.0 Pro Broadcast Edition",
+                fontSize = 9.sp,
+                color = TextMuted.copy(alpha = 0.6f)
+            )
+        }
+    }
+}
+
+/**
+ * ========================================================
+ * MAIN CONSOLE SCREEN
+ * ========================================================
+ */
 @Composable
 fun LiveKaraokeConsoleScreen() {
+    val context = LocalContext.current
+
     var selectedPreset by remember { mutableStateOf(NativeAudioEngine.Preset.POP_STUDIO) }
     var isLiveLocked by remember { mutableStateOf(false) }
+    var showDonationDialog by remember { mutableStateOf(false) }
 
     // Channel volumes (in dB)
     var vocalVol by remember { mutableStateOf(0.0f) }
@@ -60,6 +217,10 @@ fun LiveKaraokeConsoleScreen() {
     var isDelayActive by remember { mutableStateOf(true) }
     var isHarmoniActive by remember { mutableStateOf(false) }
     var isSubBoosterActive by remember { mutableStateOf(true) }
+
+    if (showDonationDialog) {
+        DonationDialog(onDismiss = { showDonationDialog = false })
+    }
 
     Column(
         modifier = Modifier
@@ -89,7 +250,7 @@ fun LiveKaraokeConsoleScreen() {
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.TopCenter)
-                    .padding(8.dp),
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -100,33 +261,50 @@ fun LiveKaraokeConsoleScreen() {
                     Text(
                         text = "Panda QQ",
                         color = Color.White,
-                        fontSize = 14.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.ExtraBold
                     )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // DONATION BUTTON (Pink / Red Heart Glow)
+                    Button(
+                        onClick = { showDonationDialog = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentPink.copy(alpha = 0.85f)),
+                        shape = RoundedCornerShape(16.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        modifier = Modifier.height(26.dp)
+                    ) {
+                        Text("💖 Donasi", fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                    }
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Button(
-                        onClick = { /* Search Overlay Modal */ },
+                        onClick = {
+                            Toast.makeText(context, "Pencarian lagu karaoke aktif!", Toast.LENGTH_SHORT).show()
+                        },
                         colors = ButtonDefaults.buttonColors(containerColor = Color.Black.copy(alpha = 0.7f)),
-                        shape = RoundedCornerShape(20.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                        shape = RoundedCornerShape(16.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        modifier = Modifier.height(26.dp)
                     ) {
-                        Text("🔍 Cari Lagu", fontSize = 10.sp, color = Color.White)
+                        Text("🔍 Cari Lagu", fontSize = 9.sp, color = Color.White)
                     }
 
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Key: 0", color = AccentAmber, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text("Key: 0", color = AccentAmber, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.width(6.dp))
                     Button(
                         onClick = { isLiveLocked = !isLiveLocked },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = if (isLiveLocked) AccentRed else Color.DarkGray
                         ),
-                        shape = RoundedCornerShape(20.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                        shape = RoundedCornerShape(16.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        modifier = Modifier.height(26.dp)
                     ) {
-                        Text(if (isLiveLocked) "🔒" else "🔓 LIVE", fontSize = 10.sp, color = Color.White)
+                        Text(if (isLiveLocked) "🔒" else "🔓 LIVE", fontSize = 9.sp, color = Color.White)
                     }
                 }
             }
@@ -323,6 +501,142 @@ fun LiveKaraokeConsoleScreen() {
     }
 }
 
+/**
+ * ========================================================
+ * DIALOG DONASI: DANA, GOPAY, OVO (082116929992)
+ * ========================================================
+ */
+@Composable
+fun DonationDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val donationNumber = "082116929992"
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1E26)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Header
+                Text(
+                    text = "💖 Dukung Panda QQ",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color.White
+                )
+
+                Text(
+                    text = "Bantu aplikasi ini agar tetap gratis, bebas iklan, dan terus berkembang untuk para musisi live streaming!",
+                    fontSize = 11.sp,
+                    color = TextMuted,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 6.dp, bottom = 14.dp)
+                )
+
+                // Box Nomor E-Wallet
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF121318), RoundedCornerShape(10.dp))
+                        .border(1.dp, AccentAmber.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                        .padding(12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "NOMOR E-WALLET (DANA / GOPAY / OVO):",
+                            fontSize = 9.sp,
+                            color = AccentAmber,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = donationNumber,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Black,
+                            color = Color.White,
+                            letterSpacing = 1.sp,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                        Text(
+                            text = "a/n Panda QQ Support",
+                            fontSize = 10.sp,
+                            color = TextMuted
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Tombol Salin Nomor
+                Button(
+                    onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        val clip = ClipData.newPlainText("Donasi Panda QQ", donationNumber)
+                        clipboard.setPrimaryClip(clip)
+                        Toast.makeText(context, "Nomor $donationNumber berhasil disalin!", Toast.LENGTH_SHORT).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("📋 Salin Nomor E-Wallet", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Tombol Direct DANA Link
+                Button(
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://link.dana.id/"))
+                        try {
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Membuka DANA...", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF118EEA)), // DANA Blue
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("📱 Buka Aplikasi DANA", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Tombol Konfirmasi WhatsApp
+                Button(
+                    onClick = {
+                        val waUrl = "https://wa.me/6282116929992?text=Halo%20Admin%20Panda%20QQ%2C%20saya%20sudah%20mengirimkan%20donasi%20dukungan."
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(waUrl))
+                        try {
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Tidak dapat membuka WhatsApp", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)), // WA Green
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("💬 Konfirmasi via WhatsApp", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                TextButton(onClick = onDismiss) {
+                    Text("Tutup", color = TextMuted, fontSize = 11.sp)
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun QuickFxPill(
     title: String,
@@ -348,13 +662,12 @@ fun QuickFxPill(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
-            // Illuminated LED Dot
             Box(
                 modifier = Modifier
                     .size(6.dp)
                     .background(
                         if (isActive) activeColor else Color.Gray.copy(alpha = 0.4f),
-                        androidx.compose.foundation.shape.CircleShape
+                        CircleShape
                     )
             )
             Spacer(modifier = Modifier.width(4.dp))
@@ -411,7 +724,6 @@ fun ChannelFaderStrip(
                 .padding(horizontal = 4.dp, vertical = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Channel Header Label
             Text(
                 text = title,
                 fontSize = 11.sp,
@@ -425,7 +737,6 @@ fun ChannelFaderStrip(
                 color = TextMuted
             )
 
-            // Fader & Integrated 24-Segment LED Meter
             Row(
                 modifier = Modifier
                     .weight(1f)
@@ -434,7 +745,6 @@ fun ChannelFaderStrip(
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Vertical Touch Fader Slider Track
                 Box(
                     modifier = Modifier
                         .width(28.dp)
@@ -463,7 +773,6 @@ fun ChannelFaderStrip(
 
                 Spacer(modifier = Modifier.width(4.dp))
 
-                // Integrated 24-Segment LED Meter
                 Column(
                     modifier = Modifier
                         .width(8.dp)
@@ -474,9 +783,9 @@ fun ChannelFaderStrip(
                 ) {
                     repeat(12) { idx ->
                         val segColor = when {
-                            idx < 2 -> AccentRed       // Overload
-                            idx < 5 -> AccentAmber     // Sweet Spot
-                            else -> Color(0xFF00E676) // Safe Green
+                            idx < 2 -> AccentRed
+                            idx < 5 -> AccentAmber
+                            else -> Color(0xFF00E676)
                         }
                         Box(
                             modifier = Modifier
@@ -488,7 +797,6 @@ fun ChannelFaderStrip(
                 }
             }
 
-            // Quick Toggle Button at bottom
             Button(
                 onClick = onSubButtonClick,
                 colors = ButtonDefaults.buttonColors(
@@ -510,4 +818,3 @@ fun ChannelFaderStrip(
         }
     }
 }
-
