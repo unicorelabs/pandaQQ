@@ -1,0 +1,28 @@
+#!/bin/sh
+
+#
+# Gradle wrapper script for Panda QQ
+#
+set -e
+
+APP_HOME=$(cd "$(dirname "$0")" && pwd)
+
+if command -v gradle >/dev/null 2>&1; then
+    exec gradle "$@"
+elif [ -n "$ANDROID_HOME" ] && [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/gradle" ]; then
+    exec "$ANDROID_HOME/cmdline-tools/latest/bin/gradle" "$@"
+else
+    echo "=========================================================================="
+    echo "  PANDA QQ - ANDROID APK BUILD INSTRUCTIONS"
+    echo "=========================================================================="
+    echo "  Gradle is not currently installed in PATH."
+    echo ""
+    echo "  Cara termudah untuk build APK (Tinggal Klik):"
+    echo "  1. Buka aplikasi 'Android Studio'."
+    echo "  2. Pilih 'Open' lalu pilih folder: $APP_HOME"
+    echo "  3. Klik menu: Build -> Build Bundle(s) / APK(s) -> Build APK(s)."
+    echo "  4. File APK 'app-debug.apk' langsung jadi di:"
+    echo "     $APP_HOME/app/build/outputs/apk/debug/app-debug.apk"
+    echo "=========================================================================="
+    exit 1
+fi

@@ -93,27 +93,40 @@ fun LiveKaraokeConsoleScreen() {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Button(
-                    onClick = { /* Search Overlay Modal */ },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Black.copy(alpha = 0.7f)),
-                    shape = RoundedCornerShape(20.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                ) {
-                    Text("🔍 Cari Lagu Minus-One...", fontSize = 11.sp, color = Color.White)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Panda QQ Logo & Branding
+                    Text("🐼", fontSize = 18.sp)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Panda QQ",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    Button(
+                        onClick = { /* Search Overlay Modal */ },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Black.copy(alpha = 0.7f)),
+                        shape = RoundedCornerShape(20.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Text("🔍 Cari Lagu", fontSize = 10.sp, color = Color.White)
+                    }
+
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text("Key: 0", color = AccentAmber, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
                     Button(
                         onClick = { isLiveLocked = !isLiveLocked },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = if (isLiveLocked) AccentRed else Color.DarkGray
                         ),
                         shape = RoundedCornerShape(20.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                     ) {
-                        Text(if (isLiveLocked) "🔒 LOCKED" else "🔓 LIVE", fontSize = 10.sp, color = Color.White)
+                        Text(if (isLiveLocked) "🔒" else "🔓 LIVE", fontSize = 10.sp, color = Color.White)
                     }
                 }
             }
