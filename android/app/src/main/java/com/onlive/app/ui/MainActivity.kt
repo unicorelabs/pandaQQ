@@ -321,7 +321,7 @@ fun LiveKaraokeConsoleScreen() {
         ) {
             PresetButton("🎤 SAPA", selectedPreset == NativeAudioEngine.Preset.TALK_CHITCHAT, Modifier.weight(1f)) {
                 selectedPreset = NativeAudioEngine.Preset.TALK_CHITCHAT
-                NativeAudioEngine.loadPreset(it)
+                NativeAudioEngine.loadPreset(NativeAudioEngine.Preset.TALK_CHITCHAT)
                 isReverbActive = false
                 isDelayActive = false
                 isHarmoniActive = false
@@ -329,7 +329,7 @@ fun LiveKaraokeConsoleScreen() {
             }
             PresetButton("✨ POP", selectedPreset == NativeAudioEngine.Preset.POP_STUDIO, Modifier.weight(1f)) {
                 selectedPreset = NativeAudioEngine.Preset.POP_STUDIO
-                NativeAudioEngine.loadPreset(it)
+                NativeAudioEngine.loadPreset(NativeAudioEngine.Preset.POP_STUDIO)
                 isReverbActive = true
                 isDelayActive = true
                 isHarmoniActive = false
@@ -337,7 +337,7 @@ fun LiveKaraokeConsoleScreen() {
             }
             PresetButton("🎸 AKUSTIK", selectedPreset == NativeAudioEngine.Preset.ACOUSTIC_WARM, Modifier.weight(1f)) {
                 selectedPreset = NativeAudioEngine.Preset.ACOUSTIC_WARM
-                NativeAudioEngine.loadPreset(it)
+                NativeAudioEngine.loadPreset(NativeAudioEngine.Preset.ACOUSTIC_WARM)
                 isReverbActive = true
                 isDelayActive = false
                 isHarmoniActive = false
@@ -345,7 +345,7 @@ fun LiveKaraokeConsoleScreen() {
             }
             PresetButton("💃 DANGDUT", selectedPreset == NativeAudioEngine.Preset.DANGDUT_MELAYU, Modifier.weight(1f)) {
                 selectedPreset = NativeAudioEngine.Preset.DANGDUT_MELAYU
-                NativeAudioEngine.loadPreset(it)
+                NativeAudioEngine.loadPreset(NativeAudioEngine.Preset.DANGDUT_MELAYU)
                 isReverbActive = true
                 isDelayActive = true
                 isHarmoniActive = false
