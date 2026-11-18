@@ -11,3 +11,4 @@
                          halManager:(CoreAudioHALManager*)halManager;
 
 @end
+
