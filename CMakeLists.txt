@@ -41,6 +41,13 @@ target_link_libraries(stress_and_benchmark_test PRIVATE
 # macOS DESKTOP BUNDLE TARGET
 # ========================================================
 if(APPLE)
+    if(NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+        set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "Minimum OS X version")
+    endif()
+    if(NOT CMAKE_OSX_ARCHITECTURES)
+        set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "Universal architectures")
+    endif()
+
     enable_language(OBJCXX)
 
     set(MACOS_SOURCES
