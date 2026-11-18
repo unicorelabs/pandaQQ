@@ -75,6 +75,10 @@ if(APPLE)
         src/dsp/include
     )
 
+    target_compile_options(PandaQQ PRIVATE
+        -fobjc-arc
+    )
+
     target_link_libraries(PandaQQ PRIVATE
         onlive_dsp
         "-framework Cocoa"

@@ -227,7 +227,7 @@
     const CGFloat faderY = 46.0f;
     const CGFloat faderH = 555.0f;
 
-    __unsafe_unretained MainWindowController* weakSelf = self;
+    std::shared_ptr<OnLive::DSP::AudioEngine> engine = _engine;
 
     // 1. VOKAL CHANNEL STRIP
     _vocalFader = [[ConsoleFaderView alloc] initWithFrame:NSMakeRect(startX, faderY, faderW, faderH)
@@ -236,13 +236,13 @@
                                                initialDb:0.0f];
     _vocalFader.autoresizingMask = NSViewMinYMargin | NSViewHeightSizable;
     _vocalFader.onVolumeChanged = ^(float db) {
-        if (weakSelf && weakSelf->_engine) weakSelf->_engine->getVocalChannel().setVolumeDb(db);
+        if (engine) engine->getVocalChannel().setVolumeDb(db);
     };
     _vocalFader.onMuteChanged = ^(BOOL muted) {
-        if (weakSelf && weakSelf->_engine) weakSelf->_engine->getVocalChannel().setMute(muted);
+        if (engine) engine->getVocalChannel().setMute(muted);
     };
     _vocalFader.onSoloChanged = ^(BOOL soloed) {
-        if (weakSelf && weakSelf->_engine) weakSelf->_engine->getVocalChannel().setSolo(soloed);
+        if (engine) engine->getVocalChannel().setSolo(soloed);
     };
     [rightPane addSubview:_vocalFader];
 
@@ -253,13 +253,13 @@
                                             initialDb:0.0f];
     _fxFader.autoresizingMask = NSViewMinYMargin | NSViewHeightSizable;
     _fxFader.onVolumeChanged = ^(float db) {
-        if (weakSelf && weakSelf->_engine) weakSelf->_engine->getFxChannel().setVolumeDb(db);
+        if (engine) engine->getFxChannel().setVolumeDb(db);
     };
     _fxFader.onMuteChanged = ^(BOOL muted) {
-        if (weakSelf && weakSelf->_engine) weakSelf->_engine->getFxChannel().setMute(muted);
+        if (engine) engine->getFxChannel().setMute(muted);
     };
     _fxFader.onSoloChanged = ^(BOOL soloed) {
-        if (weakSelf && weakSelf->_engine) weakSelf->_engine->getFxChannel().setSolo(soloed);
+        if (engine) engine->getFxChannel().setSolo(soloed);
     };
     [rightPane addSubview:_fxFader];
 
@@ -270,13 +270,13 @@
                                                initialDb:0.0f];
     _musicFader.autoresizingMask = NSViewMinYMargin | NSViewHeightSizable;
     _musicFader.onVolumeChanged = ^(float db) {
-        if (weakSelf && weakSelf->_engine) weakSelf->_engine->getMusicChannel().setVolumeDb(db);
+        if (engine) engine->getMusicChannel().setVolumeDb(db);
     };
     _musicFader.onMuteChanged = ^(BOOL muted) {
-        if (weakSelf && weakSelf->_engine) weakSelf->_engine->getMusicChannel().setMute(muted);
+        if (engine) engine->getMusicChannel().setMute(muted);
     };
     _musicFader.onSoloChanged = ^(BOOL soloed) {
-        if (weakSelf && weakSelf->_engine) weakSelf->_engine->getMusicChannel().setSolo(soloed);
+        if (engine) engine->getMusicChannel().setSolo(soloed);
     };
     [rightPane addSubview:_musicFader];
 
@@ -287,13 +287,13 @@
                                                 initialDb:0.0f];
     _masterFader.autoresizingMask = NSViewMinYMargin | NSViewHeightSizable;
     _masterFader.onVolumeChanged = ^(float db) {
-        if (weakSelf && weakSelf->_engine) weakSelf->_engine->getMasterChannel().setVolumeDb(db);
+        if (engine) engine->getMasterChannel().setVolumeDb(db);
     };
     _masterFader.onMuteChanged = ^(BOOL muted) {
-        if (weakSelf && weakSelf->_engine) weakSelf->_engine->getMasterChannel().setMute(muted);
+        if (engine) engine->getMasterChannel().setMute(muted);
     };
     _masterFader.onSoloChanged = ^(BOOL soloed) {
-        if (weakSelf && weakSelf->_engine) weakSelf->_engine->getMasterChannel().setSolo(soloed);
+        if (engine) engine->getMasterChannel().setSolo(soloed);
     };
     [rightPane addSubview:_masterFader];
 
