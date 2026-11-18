@@ -1,110 +1,147 @@
 # PRODUCT REQUIREMENTS DOCUMENT (PRD)
-## Project: Live Karaoke Mobile DAW & Broadcast Suite
-**Version:** 1.0.0  
-**Status:** Approved for Development  
-**Product Category:** Pro-Audio Mobile Workstation & Live Streaming Utility  
+## Project: Panda QQ - Live Karaoke DAW & Broadcast Suite
+**Version:** 1.1.0-CROSS-PLATFORM  
+**Status:** Approved for Development (Phase 1: Android Live • Phase 2: iOS, macOS, Windows)  
+**Product Category:** Pro-Audio Multiplatform Workstation & Live Broadcast Utility  
 
 ---
 
 ## 1. Executive Summary & Objective
 
-The objective of this application is to turn an Android smartphone (and subsequently iOS/macOS/Windows) into a professional, zero-latency digital audio workstation (DAW) and live karaoke console. It allows live performers on TikTok, YouTube Live, and Instagram to sing with studio-grade vocal dynamic processing, automated backing-track carving, and rich studio effects within a single intuitive interface.
+**Panda QQ** adalah aplikasi workstation audio digital (DAW) dan konsol siaran langsung karaoke berlatensi nol (*zero-latency*) yang dirancang khusus untuk kreator siaran langsung di TikTok Live, YouTube Live, dan Instagram.
+
+Aplikasi ini menggabungkan pemutar karaoke YouTube dengan rak efek vokal sekelas studio rekaman profesional (Gate, De-Esser, 31-Band / Pro-Q Dynamic EQ, Kompresor, Reverb, Delay, Harmonizer, Chorus, dan True-Peak Limiter) yang didukung oleh **Core Audio DSP C++20 murni**.
 
 ---
 
-## 2. Target Users & Personas
+## 2. Target Pengguna & Persona
 
-1. **The TikTok Live Singer / Creator (Beginner to Intermediate)**: Wants to sing karaoke directly from YouTube, wants their voice to sound like a studio album immediately without learning complex audio engineering terms.
-2. **The Professional Busker / Musician (Advanced)**: Needs precision control over 31-band EQ, fine-tuned compression, manual delay tap-tempo, custom key-locked harmonizer, and separate headphone cue mixes.
+1. **The Live Streamer / Singer (Pemula - Menengah)**:
+   - Ingin bernyanyi karaoke dari YouTube dengan suara vokal tebal, halus, dan seimbang seperti rekaman album tanpa perlu mempelajari ilmu audio engineering rumit.
+   - Mengandalkan tombol 1-sentuh (*1-Tap Presets* dan *Quick FX Stompboxes*).
+2. **The Professional Musician / Soundman (Tingkat Lanjut)**:
+   - Membutuhkan kontrol bedah mikro (*surgical audio control*): penyesuaian 31-Band Graphic EQ dengan gestur usap layar (*finger-draw*), dynamic sidechain carving, pengaturan milidetik delay, scale-lock harmonizer, dan penataan ulang rack insert secara modular.
 
 ---
 
-## 3. Core Hardware & Operating Topography (2-Phone Paradigm)
+## 3. Topografi Perangkat Keras: Paradigma 2 HP (Mobile) & Desktop Studio
+
+### 3.1 Setup Mobile (Android & iOS)
+```
+[ 🎤 Mikrofon ] ──► [ Audio Interface / Soundcard OTG ] ◄──(Kabel USB OTG)──► [ 📱 HP 1: Panda QQ ]
+                               │                                              (YouTube + Core DSP)
+                               ├──► [ 📱 HP 2: TikTok Live App (Kamera & Chat) ]
+                               └──► [ 🎧 In-Ear Monitor Kabel (0 ms Delay) ]
+```
+- **HP 1 (Panda QQ Host)**: Menjalankan pemutar YouTube, memproses DSP audio dua arah (*full-duplex*) via USB OTG.
+- **HP 2 (TikTok Live Client)**: Membuka aplikasi TikTok resmi untuk kamera dan membaca komentar penonton. Menerima audio master digital stereo dari soundcard.
+- **IEM Kabel**: Menyediakan monitoring vokal dan musik tanpa delay (*zero latency*).
+
+### 3.2 Setup Desktop (macOS & Windows)
+- Pada komputer PC/Mac, Panda QQ dapat berjalan berdampingan dengan software siaran (TikTok Live Studio / OBS Studio) dalam 1 perangkat laptop, dengan perutean audio internal digital (*Virtual Cable / Loopback*).
+
+---
+
+## 4. Arsitektur Multi-Platform & Strategi Driver OS
+
+Proyek ini dibangun menggunakan pola **Monorepo**, di mana satu folder inti **`src/dsp/` (C++20)** dipakai bersama oleh seluruh platform untuk menjamin keseragaman karakter audio:
 
 ```
-[ Microphone ] ──► [ Audio Interface / Soundcard ] ◄──► [ HP 1: App (YouTube + DAW Engine) ]
-                           │
-                           ├──► [ HP 2: TikTok Live App (Camera + Chat) ]
-                           └──► [ Wired IEM Earphones (Zero Latency Monitoring) ]
+PandaQQ/
+├── src/dsp/                 <-- CORE AUDIO C++20 (100% Shared Logic)
+├── android/                 <-- Android (Kotlin + Jetpack Compose + Oboe NDK)
+├── ios/                     <-- iOS / iPadOS (SwiftUI + CoreAudio / AUv3)
+├── macos/                   <-- macOS (SwiftUI + CoreAudio Virtual HAL Bridge)
+├── windows/                 <-- Windows (C++ WinUI 3 / Qt + WASAPI / ASIO)
+└── docs/                    <-- Specs, PRD, & Panduan
 ```
-- **Phone 1 (Host App)**: Runs YouTube player, processes DSP Audio Engine, manages live mixer controls. Connected to Soundcard via USB OTG.
-- **Phone 2 (Broadcast Client)**: Runs official TikTok application for video streaming and live chat reading. Receives pure stereo mix from Soundcard Broadcast Out.
+
+### 4.1 Android
+- **Driver HAL**: Google Oboe (AAudio dengan performa low-latency otomatis fallback ke OpenSL ES).
+- **Koneksi Soundcard**: USB Audio Class 2.0 (UAC2) via kabel USB OTG.
+- **Target Latensi**: $\le 12\text{ ms}$ round-trip.
+
+### 4.2 iOS & iPadOS (iPhone / iPad)
+- **Driver HAL**: Apple CoreAudio & `AVAudioEngine`.
+- **Kebutuhan Driver Fisik**: **0% (Driverless / Class-Compliant)**. Semua soundcard USB langsung terdeteksi otomatis saat dicolokkan ke port USB-C atau Lightning Camera Adapter.
+- **Target Latensi**: $3 - 5\text{ ms}$ (sangat cepat).
+- **Fitur Ekstra**: **AUv3 Plugin Support**. Panda QQ dapat digunakan di dalam DAW iOS lain seperti GarageBand, Logic Pro for iPad, dan AUM.
+
+### 4.3 macOS (MacBook & Mac Desktop)
+- **Driver Hardware Soundcard**: **Driverless** via Apple CoreAudio UAC2.
+- **Kebutuhan Driver Virtual (Internal Routing)**:
+  - **PandaQQ Audio Bridge (CoreAudio HAL Plugin)**: Driver virtual internal ringan untuk menangkap (*capture*) audio YouTube dari browser Safari/Chrome langsung ke mixer Panda QQ tanpa kabel fisik tambahan.
+- **Tata Letak GUI**: Tampilan desktop modular layar lebar (YouTube di kiri atas, spektrum RTA Pro-Q besar di tengah, fader console di kanan).
+
+### 4.4 Windows (PC / Laptop)
+Windows memiliki dua opsi mesin audio untuk fleksibilitas maksimal:
+1. **Mode 1: WASAPI Exclusive Mode (Pilihan Pemula - Bebas Driver)**:
+   - Bawaan native Windows 10/11. **Tidak butuh instalasi driver pihak ketiga**.
+   - Latensi stabil di kisaran $8 - 12\text{ ms}$.
+   - **Fitur WASAPI Loopback Capture**: Menggunakan flag `AUDCLNT_STREAMFLAGS_LOOPBACK` bawaan Windows untuk menangkap audio karaoke YouTube dari browser Chrome/Edge secara digital tanpa software kabel tambahan.
+2. **Mode 2: ASIO Low-Latency Driver (Pilihan Profesional)**:
+   - Mendukung driver ASIO resmi soundcard studio (*Focusrite ASIO*, *Yamaha Steinberg ASIO*) atau universal driver (*ASIO4ALL* / *FlexASIO*).
+   - Latensi setara studio analog ($3 - 5\text{ ms}$).
 
 ---
 
-## 4. Detailed Feature Specifications
+## 5. Spesifikasi Detail Fitur Konsol Audio
 
-### 4.1 Screen Layout & Partitioning (Phone 1 - Android Optimized)
-- **Top Section (38% Screen Height)**: 
-  - Embedded YouTube Player with Video & Lyrics (Standard 16:9 aspect ratio, ~220 dp).
-  - Quick Search bar with overlay modal (anti-push layout when virtual keyboard pops up).
-  - Digital Pitch Shift / Key Transpose buttons (`-3` to `+3` semitones) and `[🔒 LIVE LOCK]`.
-- **Middle Section (12% Screen Height)**:
-  - 1-Tap Ready-to-Use Factory Preset Bar: `[🎤 SAPA]` | `[✨ POP/BALLAD]` | `[🎸 AKUSTIK]` | `[💃 DANGDUT]` | `[🔥 RnB]`.
-- **Bottom Section (50% Screen Height - Live Fader Console)**:
-  - **4 Main Persistent Faders (Drag-and-Drop Reorderable)**:
-    1. **`[VOKAL]`**: Input volume mic dengan 24-segment LED meter, Mute (tap), Solo (long press).
-    2. **`[EFEK VOKAL]`**: Macro fader Reverb & Delay siap pakai, tombol Auto-Tune.
-    3. **`[MUSIK]`**: Volume YouTube dengan Auto-Carve dynamic sidechain switch.
-    4. **`[MASTER]`**: Output broadcast level ke TikTok dengan True-Peak Limiter dan Master VU meter.
-  - **Drag-and-Drop Ergonomics**: Pengguna dapat menahan (*long-press*) header fader strip dan menggesernya secara horizontal ke kiri/kanan (sangat ergonomis untuk penyanyi kidal vs tangan kanan).
-  - **Swipe-Up Pro Drawer**: Usap dari bawah ke atas untuk mengakses 4/7/31-Band EQ, Pro-Q dynamic matrix, dan Modular Insert Rack.
+### 5.1 Tata Letak Layar Mobile (Android & iPhone Portrait)
+- **Layar Atas (38% Tinggi Layar)**:
+  - Pemutar YouTube Karaoke (Rasio standar 16:9, ~220 dp).
+  - Modal Pencarian Lagu Cepat (anti-geser saat keyboard virtual muncul).
+  - Digital Key Transpose (`-3` s/d `+3` semitone).
+  - Tombol `[🔒 LIVE LOCK]` (anti-senggol fader saat live).
+  - Tombol `[💖 Donasi]` (modal pendukung DANA, GoPay, OVO `082116929992`).
+- **Layar Tengah (12% Tinggi Layar)**:
+  - **Baris Preset 1-Sentuh**: `[🎤 SAPA]`, `[✨ POP]`, `[🎸 AKUSTIK]`, `[💃 DANGDUT]`, `[🔥 RnB]`.
+  - **Tombol Cepat Stompbox Send FX**:
+    - `[✨ REVERB]`: On/Off ruang gema instan (Cyan glow).
+    - `[🔁 DELAY]`: On/Off pantulan echo tempo-sync (Green glow).
+    - `[👥 HARMONI]`: On/Off backing vocal otomatis nada terts atas (Purple glow - sangat pas untuk bagian *Reff/Chorus*).
+    - `[🔊 SUB BASS]`: On/Off synthesizer sub-harmonic bass musik YouTube (Amber glow).
+- **Layar Bawah (50% Tinggi Layar - Konsol 4 Fader)**:
+  - Fader vertikal tebal untuk **`[VOKAL]`**, **`[EFEK]`**, **`[MUSIK]`**, dan **`[MASTER]`**.
+  - **Integrated 24-Segment LED dBFS Meter**:
+    - Hijau ($-\infty$ s/d $-12\text{ dBFS}$): Level aman.
+    - Kuning ($-12$ s/d $-2\text{ dBFS}$): *Sweet spot* broadcast TikTok.
+    - Merah ($-2$ s/d $0\text{ dBFS}$): Indikator bahaya clipping dengan **Peak-Hold 2,0 detik**.
+  - Tombol **MUTE** (ketukan instan) dan tombol **SOLO** (dilindungi *Long-Press 0,8 detik* dengan mode CUE/PFL agar tidak mematikan siaran penonton).
+  - **Drag-and-Drop Reordering**: Fader dapat dipindah urutan posisinya secara horizontal (ramah penyanyi bertangan kidal).
+- **Drawer Studio Pro (Swipe Up)**:
+  - Diusap dari bawah ke atas untuk membuka pengaturan bedah mikro: EQ 4-Band / 7-Band / 31-Band *Finger-Draw*, Pro-Q dynamic sidechain matrix, dan modul insert rack tambahan.
 
-### 4.2 Channel Strip Controls & Safety Mechanism
-Every audio channel (Vocal, Music, SFX, Master) contains:
-1. **Vertical Fader**: Smooth logarithmic volume taper (-inf to +6 dB).
-2. **Integrated 24-Segment LED dBFS Meter**:
-   - Green: -inf to -12 dBFS (Safe Signal).
-   - Yellow/Amber: -12 to -2 dBFS (Nominal Broadcast Sweet Spot).
-   - Red: -2 to 0 dBFS (Overload Warning).
-   - Peak Hold Indicator: Retains maximum peak level indicator bar for 2.0 seconds.
-3. **MUTE Button**:
-   - Single Tap activation.
-   - Visual State: Pulsing bright red LED indicator.
-4. **SOLO Button (Safety Guard)**:
-   - **Long-Press Activation (0.8s hold required)** to prevent accidental live stream drops.
-   - Dual-logic routing: Operates in **CUE/PFL Mode** (only isolates audio inside performer's IEM headphones, leaving live stream audience intact).
-   - Visual State: Glowing amber gold LED indicator.
-5. **PAN Potentiometer**:
-   - Center-detented rotary knob with numeric display (`L100` ... `C` ... `R100`).
+### 5.2 Rangkaian Insert Dinamis Vokal (Studio Insert Rack)
+1. **High-Pass Filter**: Pemotongan sub-rumble di $85\text{ Hz}$ ($18\text{ dB/oct}$).
+2. **Adaptive Noise Gate**: Menghilangkan dengung kipas angin/AC ruangan.
+3. **Split-Band De-Esser (5.5 - 8.5 kHz)**: Menjinakkan desis tajam konsonan "S" dan "T".
+4. **Pro-Q Style Dynamic Parametric EQ**: Pembentuk karakter vokal renyah (*air & body*).
+5. **Studio Opto/VCA Compressor**: Meratakan nada tinggi dan bisikan dengan indikator *Gain Reduction (GR)* visual.
+6. **Analog Warmth / Saturation**: Penebal vokal berkarakter tabung rekaman.
+7. **Broadcast True-Peak Limiter**: Menahan sinyal maksimal di **$-1.0\text{ dBTP}$** agar transmisi audio AAC di TikTok tidak pernah pecah.
 
-### 4.3 Default Insert Rack vs. Pro Expansion
-- **Factory Default Insert Chain (Always present on fresh launch)**:
-  1. *Adaptive Noise Gate*: Suppresses ambient fan and AC noise.
-  2. *De-Esser*: Tames 6-8kHz vocal sibilance.
-  3. *Pro-Q Style Dynamic EQ*: Shapes fundamental tone.
-  4. *Opto Vocal Compressor*: Transparent gain leveling with active Gain Reduction (GR) meter.
-  5. *Peak Limiter*: Prevents digital clipping.
-- **Pro User Insert Rack Features**:
-  - Ability to add additional inserts (`[+ Add Plugin Slot]`).
-  - Drag-and-drop to reorder signal chain (e.g., placing Compressor before EQ).
-  - Module bypass toggle on every insert.
-  - Real-time DSP CPU Load Meter (`0% - 100%`) in the top navigation.
-
-### 4.4 EQ Modes (4 Selectable Options)
-1. **4-Band Semi-Parametric**: Low Shelf, Low-Mid, High-Mid, High Shelf.
-2. **7-Band Graphic**: Fixed stage frequencies (63Hz, 160Hz, 400Hz, 1kHz, 2.5kHz, 6.3kHz, 16kHz).
-3. **31-Band ISO 1/3-Octave Graphic EQ**:
-   - Supports **Finger-Draw Curve Gesture**: User drags a finger across the screen and all 31 sliders interpolate to match the curve.
-   - 3-bank quick zoom: Low (20-160Hz), Mid (200-2.5kHz), High (3.15k-20kHz).
-4. **Pro-Q Style Dynamic Sidechain Node**:
-   - Band frequency linking between Vocal and Music.
-   - "Vocal Pocket Carve": Music automatically attenuates 1.5 - 3.5kHz only when vocal singing is detected.
-
-### 4.5 Send FX Matrix (4 Core Buses)
-1. **Reverb Engine**: Hall, Plate, Room, Church algorithms; Decay (0.5s - 10s), Pre-delay (0 - 150ms), High/Low Cut filters.
-2. **Delay Engine**: Digital Clean, Tape Echo, Ping-Pong; Tap-Tempo sync, Note divisions (1/4, 1/8, Dotted), Feedback, Damping.
-3. **Intelligent Harmonizer**: Monophonic pitch tracking with PSOLA synthesis; Scale/Key lock (Major/Minor C through B); Interval selection (+3rd, -3rd, +5th, Octave Up/Down); Humanize Detune.
-4. **Dimension Chorus**: Modulation Rate, Depth, Stereo Spread Width (0 - 200%).
-
-### 4.6 1-Tap Quick Presets & User Preset Vault
-- Factory 1-Tap Presets: `[🎤 TALK / SAPA]`, `[✨ BALLAD]`, `[🎸 ACOUSTIC]`, `[🔥 RnB]`, `[💃 DANGDUT]`.
-- User Preset Management: `[💾 Save Current Mix]`, rename, overwrite, and export to backup file / QR code.
+### 5.3 Modul Pengolah Musik YouTube (Music Conditioning Engine)
+1. **Sub-Harmonic Synthesizer (MaxxBass style)**: Menghasilkan frekuensi harmonik rendah yang padat tanpa membuat speaker HP penonton jebol.
+2. **Dynamic Vocal Pocket Carver**: Otomatis melubangi frekuensi musik di $1.5 - 3.5\text{ kHz}$ HANYA ketika vokal bernyanyi.
+3. **Sidechain Auto-Ducker**: Menurunkan volume musik $2 - 3\text{ dB}$ secara lembut saat penyanyi menyapa penonton.
 
 ---
 
-## 5. Non-Functional Requirements
+## 6. Persyaratan Non-Fungsional (Kinerja & Keamanan)
 
-- **Audio Round-Trip Latency**: Must remain $< 15 \text{ ms}$ (Android) and $< 7 \text{ ms}$ (iOS/macOS).
-- **UI Render Performance**: Solid 60 FPS under continuous audio meter updates.
-- **Safety Mechanism**: "Live Lock Mode" toggle to disable accidental touch manipulation during live broadcasting.
+- **DSP Real-Time Safety**: Zero alokasi memori dinamis di audio render loop, bebas blocking mutex, SPSC ring buffer lock-free.
+- **Beban CPU**: Di bawah $5\%$ dari 1 core CPU pada buffer 256 frame @ 48 kHz (Hasil benchmark aktual: **$1,24\%$**).
+- **Keluaran True-Peak**: Mutlak tidak boleh melebihi $-1.0\text{ dBTP}$ dalam kondisi sinyal masukan ekstrem apa pun.
+- **Tampilan Visual**: Stabil pada 60 FPS menggunakan GPU accelerated canvas.
+
+---
+
+## 7. Roadmap Rilis Fitur
+
+| Versi | Target Platform | Fitur Utama |
+|---|---|---|
+| **v1.0.0 (Selesai)** | Android (APK) | Core C++20 DSP, Jetpack Compose UI, 4 Fader, Stompbox FX, YouTube split player, Donation modal. |
+| **v1.2.0** | iOS (iPhone/iPad) | Porting ke SwiftUI + CoreAudio native driverless, optimasi iPad dual-pane, dukungan AUv3. |
+| **v1.5.0** | macOS (MacBook) | Aplikasi desktop SwiftUI, CoreAudio Virtual Loopback HAL Driver untuk capture YouTube internal. |
+| **v2.0.0** | Windows (PC) | Aplikasi desktop WinUI 3, WASAPI Exclusive + WASAPI Loopback Capture, ASIO Pro Driver Support. |
