@@ -5,6 +5,15 @@
 #include "AudioEngine.hpp"
 #include <memory>
 
+@interface AudioHardwareDevice : NSObject
+@property (nonatomic, assign) AudioDeviceID deviceID;
+@property (nonatomic, copy) NSString* name;
+@property (nonatomic, assign) int inputChannels;
+@property (nonatomic, assign) int outputChannels;
+@property (nonatomic, assign) BOOL isInput;
+@property (nonatomic, assign) BOOL isOutput;
+@end
+
 @interface CoreAudioHALManager : NSObject
 
 @property (nonatomic, readonly) BOOL isRunning;
@@ -14,6 +23,10 @@
 - (instancetype)initWithAudioEngine:(std::shared_ptr<OnLive::DSP::AudioEngine>)engine;
 - (BOOL)start;
 - (void)stop;
+
++ (NSArray<AudioHardwareDevice*>*)scanAvailableDevices;
++ (NSArray<NSString*>*)getAvailableInputNames;
++ (NSArray<NSString*>*)getAvailableOutputNames;
 
 - (float)getVocalMeterDb;
 - (float)getMusicMeterDb;

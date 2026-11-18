@@ -1,6 +1,9 @@
 #import "MainWindowController.h"
 #import "PandaTheme.h"
 #import "ConsoleFaderView.h"
+#import "ProRotaryKnobView.h"
+#import "ProChannelStripView.h"
+#import "CoreAudioHALManager.h"
 
 // Flipped coordinate container for predictable, rock-solid top-to-bottom layout
 @interface RightMixerPaneView : NSView
@@ -31,18 +34,18 @@
     // Right Pane Flipped Container
     RightMixerPaneView* _rightPane;
 
-    // Preset & FX Buttons
-    NSMutableArray<NSButton*>* _presetButtons;
-    NSButton* _reverbBtn;
-    NSButton* _delayBtn;
-    NSButton* _harmoniBtn;
-    NSButton* _subBassBtn;
+    // Top Pro DAW Menu Bar
+    NSView* _dawMenuBar;
+    NSPopUpButton* _profilePopup;
 
-    // Real Hardware Style Console Channel Strips
-    ConsoleFaderView* _vocalFader;
-    ConsoleFaderView* _fxFader;
-    ConsoleFaderView* _musicFader;
-    ConsoleFaderView* _masterFader;
+    // Channel Strip Rack
+    NSScrollView* _rackScrollView;
+    RightMixerPaneView* _rackContentView;
+    NSMutableArray<ProChannelStripView*>* _channelStrips;
+    ProChannelStripView* _vocalStrip;
+    ProChannelStripView* _fxStrip;
+    ProChannelStripView* _musicStrip;
+    ProChannelStripView* _masterStrip;
 
     // Bottom Status Bar
     NSView* _statusBar;
@@ -56,6 +59,10 @@
 
     NSTimer* _meterTimer;
 }
+@property (nonatomic, strong) ProChannelStripView* vocalStrip;
+@property (nonatomic, strong) ProChannelStripView* fxStrip;
+@property (nonatomic, strong) ProChannelStripView* musicStrip;
+@property (nonatomic, strong) ProChannelStripView* masterStrip;
 @end
 
 @implementation MainWindowController
@@ -75,7 +82,6 @@
         _engine = engine;
         _halManager = halManager;
         _currentKey = 0;
-        _presetButtons = [NSMutableArray array];
         _selectedInputDevice = @"Built-in Microphone / USB Soundcard";
         _selectedOutputDevice = @"External Headphones / Jack 3.5mm";
         _selectedBufferSize = 128;
@@ -185,162 +191,242 @@
     _rightPane.wantsLayer = YES;
     _rightPane.layer.backgroundColor = PandaTheme::Chassis().CGColor;
 
-    // 1. TOP HEADER TOOLBAR (y = 8 .. 48)
-    NSView* headerBar = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 560, 48)];
-    headerBar.wantsLayer = YES;
-    headerBar.layer.backgroundColor = PandaTheme::Background().CGColor;
-    [_rightPane addSubview:headerBar];
+    // ========================================================
+    // RIGHT PANE: PRO HARDWARE MIXING CONSOLE RACK (DAW Matrix)
+    // ========================================================
+    _rightPane = [[RightMixerPaneView alloc] initWithFrame:NSMakeRect(760, 0, 560, 820)];
+    _rightPane.wantsLayer = YES;
+    _rightPane.layer.backgroundColor = PandaTheme::Chassis().CGColor;
 
-    NSTextField* mixerTitle = [[NSTextField alloc] initWithFrame:NSMakeRect(14, 12, 160, 24)];
-    mixerTitle.stringValue = @"PRO AUDIO MIXER";
-    mixerTitle.font = [NSFont boldSystemFontOfSize:13];
-    mixerTitle.textColor = PandaTheme::Cyan();
-    mixerTitle.backgroundColor = [NSColor clearColor];
-    mixerTitle.bezeled = NO;
-    mixerTitle.editable = NO;
-    [headerBar addSubview:mixerTitle];
+    // 1. TOP PRO DAW MENU & TOOLBAR (y = 0 .. 32)
+    _dawMenuBar = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 560, 32)];
+    _dawMenuBar.wantsLayer = YES;
+    _dawMenuBar.layer.backgroundColor = [NSColor colorWithCalibratedRed:0.12f green:0.13f blue:0.15f alpha:1.0f].CGColor;
+    [_rightPane addSubview:_dawMenuBar];
 
-    // ⚙️ Audio Setup Button
-    NSButton* audioSetupBtn = [[NSButton alloc] initWithFrame:NSMakeRect(180, 10, 115, 28)];
-    audioSetupBtn.title = @"⚙️ AUDIO SETUP";
-    audioSetupBtn.bezelStyle = NSBezelStyleRounded;
-    audioSetupBtn.font = [NSFont systemFontOfSize:10.5f weight:NSFontWeightMedium];
-    audioSetupBtn.target = self;
-    audioSetupBtn.action = @selector(showAudioSetupModal:);
-    [headerBar addSubview:audioSetupBtn];
-
-    // 🎛️ Studio FX Rack Button
-    NSButton* fxRackBtn = [[NSButton alloc] initWithFrame:NSMakeRect(302, 10, 100, 28)];
-    fxRackBtn.title = @"🎛️ FX RACK";
-    fxRackBtn.bezelStyle = NSBezelStyleRounded;
-    fxRackBtn.font = [NSFont systemFontOfSize:10.5f weight:NSFontWeightMedium];
-    fxRackBtn.target = self;
-    fxRackBtn.action = @selector(showFxRackModal:);
-    [headerBar addSubview:fxRackBtn];
-
-    // 💖 Donation Button
-    NSButton* donateBtn = [[NSButton alloc] initWithFrame:NSMakeRect(410, 10, 136, 28)];
-    donateBtn.title = @"💖 DONASI E-WALLET";
-    donateBtn.bezelStyle = NSBezelStyleRounded;
-    donateBtn.font = [NSFont systemFontOfSize:10 weight:NSFontWeightBold];
-    donateBtn.target = self;
-    donateBtn.action = @selector(showDonationAlert:);
-    [headerBar addSubview:donateBtn];
-
-    // 2. 1-TAP PRESET STRIP (y = 52 .. 94)
-    NSTextField* presetTitle = [[NSTextField alloc] initWithFrame:NSMakeRect(14, 52, 220, 16)];
-    presetTitle.stringValue = @"FACTORY PRESETS (1-TAP):";
-    presetTitle.font = [NSFont boldSystemFontOfSize:9.5f];
-    presetTitle.textColor = PandaTheme::TextMuted();
-    presetTitle.bezeled = NO;
-    presetTitle.editable = NO;
-    presetTitle.backgroundColor = [NSColor clearColor];
-    [_rightPane addSubview:presetTitle];
-
-    NSArray* presets = @[@"🎤 SAPA", @"✨ POP", @"🎸 AKUSTIK", @"💃 DANGDUT", @"🔥 RNB"];
-    for (NSUInteger i = 0; i < presets.count; ++i) {
-        NSButton* b = [[NSButton alloc] initWithFrame:NSMakeRect(14 + i * 106, 70, 100, 28)];
-        b.title = presets[i];
-        b.tag = i;
-        b.bezelStyle = NSBezelStyleRounded;
-        b.font = [NSFont boldSystemFontOfSize:10];
-        b.target = self;
-        b.action = @selector(onPresetSelected:);
-        [_presetButtons addObject:b];
-        [_rightPane addSubview:b];
+    // Left Menu Labels: File, Edit, View, Setup, Help, About
+    NSArray* menuItems = @[@"File", @"Edit", @"View", @"Setup", @"Help", @"About"];
+    CGFloat mX = 8.0f;
+    for (NSString* m in menuItems) {
+        NSButton* mb = [[NSButton alloc] initWithFrame:NSMakeRect(mX, 4, 38, 22)];
+        mb.title = m;
+        mb.bezelStyle = NSBezelStyleInline;
+        mb.bordered = NO;
+        mb.font = [NSFont systemFontOfSize:10.5f weight:NSFontWeightMedium];
+        mb.contentTintColor = [NSColor colorWithCalibratedWhite:0.82f alpha:1.0f];
+        mb.target = self;
+        if ([m isEqualToString:@"Setup"]) {
+            mb.action = @selector(showAudioSetupModal:);
+        } else if ([m isEqualToString:@"About"]) {
+            mb.action = @selector(showDonationAlert:);
+        }
+        [_dawMenuBar addSubview:mb];
+        mX += 40.0f;
     }
-    // Default preset selected is POP
-    [self updatePresetHighlight:1];
 
-    // 3. QUICK FX STOMPBOX STRIP (y = 104 .. 148)
-    NSTextField* stompTitle = [[NSTextField alloc] initWithFrame:NSMakeRect(14, 104, 250, 16)];
-    stompTitle.stringValue = @"QUICK SEND FX STOMPBOXES:";
-    stompTitle.font = [NSFont boldSystemFontOfSize:9.5f];
-    stompTitle.textColor = PandaTheme::TextMuted();
-    stompTitle.bezeled = NO;
-    stompTitle.editable = NO;
-    stompTitle.backgroundColor = [NSColor clearColor];
-    [_rightPane addSubview:stompTitle];
+    // Divider
+    NSBox* d1 = [[NSBox alloc] initWithFrame:NSMakeRect(mX + 2, 6, 1, 18)];
+    d1.boxType = NSBoxSeparator;
+    [_dawMenuBar addSubview:d1];
+    mX += 8.0f;
 
-    _reverbBtn  = [self createStompbox:@"✨ REVERB" frame:NSMakeRect(14, 122, 126, 28) action:@selector(toggleReverb:)];
-    _delayBtn   = [self createStompbox:@"🔁 DELAY" frame:NSMakeRect(148, 122, 126, 28) action:@selector(toggleDelay:)];
-    _harmoniBtn = [self createStompbox:@"👥 HARMONI" frame:NSMakeRect(282, 122, 126, 28) action:@selector(toggleHarmoni:)];
-    _subBassBtn = [self createStompbox:@"🔊 SUB BASS" frame:NSMakeRect(416, 122, 126, 28) action:@selector(toggleSubBass:)];
+    // Undo / Redo buttons: ↶ ↷
+    NSButton* undoBtn = [[NSButton alloc] initWithFrame:NSMakeRect(mX, 4, 22, 22)];
+    undoBtn.title = @"↶";
+    undoBtn.font = [NSFont systemFontOfSize:12.0f];
+    undoBtn.bezelStyle = NSBezelStyleInline;
+    [_dawMenuBar addSubview:undoBtn];
+    mX += 24.0f;
 
-    [_rightPane addSubview:_reverbBtn];
-    [_rightPane addSubview:_delayBtn];
-    [_rightPane addSubview:_harmoniBtn];
-    [_rightPane addSubview:_subBassBtn];
+    NSButton* redoBtn = [[NSButton alloc] initWithFrame:NSMakeRect(mX, 4, 22, 22)];
+    redoBtn.title = @"↷";
+    redoBtn.font = [NSFont systemFontOfSize:12.0f];
+    redoBtn.bezelStyle = NSBezelStyleInline;
+    [_dawMenuBar addSubview:redoBtn];
+    mX += 28.0f;
 
-    // 4. 4 CONSOLE MIXER CHANNEL STRIPS (y = 158 .. height - 34)
+    // Del & Add buttons
+    NSButton* delBtn = [[NSButton alloc] initWithFrame:NSMakeRect(mX, 5, 30, 20)];
+    delBtn.title = @"Del";
+    delBtn.font = [NSFont systemFontOfSize:9.5f weight:NSFontWeightMedium];
+    delBtn.bezelStyle = NSBezelStyleInline;
+    [_dawMenuBar addSubview:delBtn];
+    mX += 32.0f;
+
+    NSButton* addBtn = [[NSButton alloc] initWithFrame:NSMakeRect(mX, 5, 32, 20)];
+    addBtn.title = @"Add";
+    addBtn.font = [NSFont systemFontOfSize:9.5f weight:NSFontWeightMedium];
+    addBtn.bezelStyle = NSBezelStyleInline;
+    [_dawMenuBar addSubview:addBtn];
+    mX += 38.0f;
+
+    // Profile Dropdown: < Streaming Setup ▾ >
+    _profilePopup = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(mX, 4, 136, 22) pullsDown:NO];
+    _profilePopup.bezelStyle = NSBezelStyleRounded;
+    _profilePopup.font = [NSFont boldSystemFontOfSize:10.0f];
+    [_profilePopup addItemsWithTitles:@[
+        @"< Streaming Setup >",
+        @"< Live Stage Pro >",
+        @"< Studio Recording >",
+        @"< Podcast / Talk >",
+        @"< TikTok Live Studio >"
+    ]];
+    [_dawMenuBar addSubview:_profilePopup];
+    mX += 142.0f;
+
+    // Store & New Actions
+    NSButton* storeBtn = [[NSButton alloc] initWithFrame:NSMakeRect(mX, 5, 42, 20)];
+    storeBtn.title = @"Store";
+    storeBtn.font = [NSFont systemFontOfSize:9.5f weight:NSFontWeightMedium];
+    storeBtn.bezelStyle = NSBezelStyleInline;
+    [_dawMenuBar addSubview:storeBtn];
+    mX += 45.0f;
+
+    NSButton* newBtn = [[NSButton alloc] initWithFrame:NSMakeRect(mX, 5, 36, 20)];
+    newBtn.title = @"New";
+    newBtn.font = [NSFont systemFontOfSize:9.5f weight:NSFontWeightMedium];
+    newBtn.bezelStyle = NSBezelStyleInline;
+    [_dawMenuBar addSubview:newBtn];
+    mX += 40.0f;
+
+    // Hardware Rescan Button
+    NSButton* scanBtn = [[NSButton alloc] initWithFrame:NSMakeRect(mX, 5, 60, 20)];
+    scanBtn.title = @"Scan 🔄";
+    scanBtn.font = [NSFont systemFontOfSize:9.5f weight:NSFontWeightBold];
+    scanBtn.bezelStyle = NSBezelStyleInline;
+    scanBtn.target = self;
+    scanBtn.action = @selector(rescanHardwareDevices);
+    [_dawMenuBar addSubview:scanBtn];
+
+    // 2. CHANNEL STRIP RACK HORIZONTAL SCROLL VIEW (y = 32 .. totalH - 32)
+    _rackScrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(0, 32, 560, 754)];
+    _rackScrollView.hasHorizontalScroller = YES;
+    _rackScrollView.hasVerticalScroller = NO;
+    _rackScrollView.autohidesScrollers = YES;
+    _rackScrollView.drawsBackground = NO;
+    [_rightPane addSubview:_rackScrollView];
+
+    _rackContentView = [[RightMixerPaneView alloc] initWithFrame:NSMakeRect(0, 0, 580, 754)];
+    _rackContentView.wantsLayer = YES;
+    _rackContentView.layer.backgroundColor = [NSColor clearColor].CGColor;
+    _rackScrollView.documentView = _rackContentView;
+
+    // Instantiate Professional Channel Strips
+    _channelStrips = [NSMutableArray array];
     std::shared_ptr<OnLive::DSP::AudioEngine> engine = _engine;
+    __weak typeof(self) weakSelf = self;
 
-    // Vokal
-    _vocalFader = [[ConsoleFaderView alloc] initWithFrame:NSMakeRect(14, 158, 126, 620)
-                                             channelName:@"VOKAL"
-                                             accentColor:PandaTheme::Cyan()
-                                               initialDb:0.0f];
-    _vocalFader.onVolumeChanged = ^(float db) {
+    CGFloat stripW = 134.0f;
+    CGFloat stripH = 740.0f;
+
+    // 1) VOKAL
+    _vocalStrip = [[ProChannelStripView alloc] initWithFrame:NSMakeRect(6, 4, stripW, stripH)
+                                                channelType:ProChannelTypeVocal
+                                                channelName:@"VOKAL"
+                                                accentColor:PandaTheme::Cyan()
+                                                       icon:@"🎙️"];
+    self.vocalStrip = _vocalStrip;
+    _vocalStrip.onVolumeChanged = ^(float db) {
         if (engine) engine->getVocalChannel().setVolumeDb(db);
     };
-    _vocalFader.onMuteChanged = ^(BOOL muted) {
-        if (engine) engine->getVocalChannel().setMute(muted);
+    _vocalStrip.onPanChanged = ^(float pan) {
+        if (engine) engine->getVocalChannel().setPan(pan);
     };
-    _vocalFader.onSoloChanged = ^(BOOL soloed) {
-        if (engine) engine->getVocalChannel().setSolo(soloed);
+    _vocalStrip.onMuteChanged = ^(BOOL m) {
+        if (engine) engine->getVocalChannel().setMute(m);
     };
-    [_rightPane addSubview:_vocalFader];
+    _vocalStrip.onSoloChanged = ^(BOOL s) {
+        if (engine) engine->getVocalChannel().setSolo(s);
+    };
+    _vocalStrip.onChannelClicked = ^{
+        [weakSelf selectChannelStrip:weakSelf.vocalStrip];
+    };
+    [_channelStrips addObject:_vocalStrip];
+    [_rackContentView addSubview:_vocalStrip];
 
-    // Efek
-    _fxFader = [[ConsoleFaderView alloc] initWithFrame:NSMakeRect(148, 158, 126, 620)
-                                          channelName:@"EFEK"
-                                          accentColor:PandaTheme::Purple()
-                                            initialDb:0.0f];
-    _fxFader.onVolumeChanged = ^(float db) {
+    // 2) EFEK
+    _fxStrip = [[ProChannelStripView alloc] initWithFrame:NSMakeRect(6 + (stripW + 6), 4, stripW, stripH)
+                                             channelType:ProChannelTypeFX
+                                             channelName:@"EFEK"
+                                             accentColor:PandaTheme::Purple()
+                                                    icon:@"✨"];
+    self.fxStrip = _fxStrip;
+    _fxStrip.onVolumeChanged = ^(float db) {
         if (engine) engine->getFxChannel().setVolumeDb(db);
     };
-    _fxFader.onMuteChanged = ^(BOOL muted) {
-        if (engine) engine->getFxChannel().setMute(muted);
+    _fxStrip.onPanChanged = ^(float pan) {
+        if (engine) engine->getFxChannel().setPan(pan);
     };
-    _fxFader.onSoloChanged = ^(BOOL soloed) {
-        if (engine) engine->getFxChannel().setSolo(soloed);
+    _fxStrip.onMuteChanged = ^(BOOL m) {
+        if (engine) engine->getFxChannel().setMute(m);
     };
-    [_rightPane addSubview:_fxFader];
+    _fxStrip.onSoloChanged = ^(BOOL s) {
+        if (engine) engine->getFxChannel().setSolo(s);
+    };
+    _fxStrip.onChannelClicked = ^{
+        [weakSelf selectChannelStrip:weakSelf.fxStrip];
+    };
+    [_channelStrips addObject:_fxStrip];
+    [_rackContentView addSubview:_fxStrip];
 
-    // Musik
-    _musicFader = [[ConsoleFaderView alloc] initWithFrame:NSMakeRect(282, 158, 126, 620)
-                                             channelName:@"MUSIK"
-                                             accentColor:PandaTheme::Amber()
-                                               initialDb:0.0f];
-    _musicFader.onVolumeChanged = ^(float db) {
+    // 3) MUSIK
+    _musicStrip = [[ProChannelStripView alloc] initWithFrame:NSMakeRect(6 + (stripW + 6) * 2, 4, stripW, stripH)
+                                               channelType:ProChannelTypeMusic
+                                               channelName:@"MUSIK"
+                                               accentColor:PandaTheme::Amber()
+                                                      icon:@"♫"];
+    self.musicStrip = _musicStrip;
+    _musicStrip.onVolumeChanged = ^(float db) {
         if (engine) engine->getMusicChannel().setVolumeDb(db);
     };
-    _musicFader.onMuteChanged = ^(BOOL muted) {
-        if (engine) engine->getMusicChannel().setMute(muted);
+    _musicStrip.onPanChanged = ^(float pan) {
+        if (engine) engine->getMusicChannel().setPan(pan);
     };
-    _musicFader.onSoloChanged = ^(BOOL soloed) {
-        if (engine) engine->getMusicChannel().setSolo(soloed);
+    _musicStrip.onMuteChanged = ^(BOOL m) {
+        if (engine) engine->getMusicChannel().setMute(m);
     };
-    [_rightPane addSubview:_musicFader];
+    _musicStrip.onSoloChanged = ^(BOOL s) {
+        if (engine) engine->getMusicChannel().setSolo(s);
+    };
+    _musicStrip.onChannelClicked = ^{
+        [weakSelf selectChannelStrip:weakSelf.musicStrip];
+    };
+    [_channelStrips addObject:_musicStrip];
+    [_rackContentView addSubview:_musicStrip];
 
-    // Master
-    _masterFader = [[ConsoleFaderView alloc] initWithFrame:NSMakeRect(416, 158, 126, 620)
-                                              channelName:@"MASTER"
-                                              accentColor:PandaTheme::Red()
-                                                initialDb:0.0f];
-    _masterFader.onVolumeChanged = ^(float db) {
+    // 4) MASTER
+    _masterStrip = [[ProChannelStripView alloc] initWithFrame:NSMakeRect(6 + (stripW + 6) * 3, 4, stripW, stripH)
+                                                channelType:ProChannelTypeMaster
+                                                channelName:@"MASTER"
+                                                accentColor:PandaTheme::Red()
+                                                       icon:@"🔊"];
+    self.masterStrip = _masterStrip;
+    _masterStrip.onVolumeChanged = ^(float db) {
         if (engine) engine->getMasterChannel().setVolumeDb(db);
     };
-    _masterFader.onMuteChanged = ^(BOOL muted) {
-        if (engine) engine->getMasterChannel().setMute(muted);
+    _masterStrip.onPanChanged = ^(float pan) {
+        if (engine) engine->getMasterChannel().setPan(pan);
     };
-    _masterFader.onSoloChanged = ^(BOOL soloed) {
-        if (engine) engine->getMasterChannel().setSolo(soloed);
+    _masterStrip.onMuteChanged = ^(BOOL m) {
+        if (engine) engine->getMasterChannel().setMute(m);
     };
-    [_rightPane addSubview:_masterFader];
+    _masterStrip.onSoloChanged = ^(BOOL s) {
+        if (engine) engine->getMasterChannel().setSolo(s);
+    };
+    _masterStrip.onChannelClicked = ^{
+        [weakSelf selectChannelStrip:weakSelf.masterStrip];
+    };
+    [_channelStrips addObject:_masterStrip];
+    [_rackContentView addSubview:_masterStrip];
 
-    // 5. BOTTOM STATUS BAR
-    _statusBar = [[NSView alloc] initWithFrame:NSMakeRect(0, 786, 560, 34)];
+    // Default: Highlight Vocal channel (cyan glow border)
+    _vocalStrip.isSelected = YES;
+
+    // Scan Real Hardware Inputs & Outputs
+    [self rescanHardwareDevices];
+
+    // 3. BOTTOM STATUS BAR (y = totalH - 30)
+    _statusBar = [[NSView alloc] initWithFrame:NSMakeRect(0, 786, 560, 32)];
     _statusBar.wantsLayer = YES;
     _statusBar.layer.backgroundColor = PandaTheme::Background().CGColor;
     [_rightPane addSubview:_statusBar];
@@ -354,27 +440,33 @@
     _statusLabel.backgroundColor = [NSColor clearColor];
     [_statusBar addSubview:_statusLabel];
 
-    // Responsive Auto-Sizing Block for Faders and Status Bar
-    __unsafe_unretained ConsoleFaderView* vFader = _vocalFader;
-    __unsafe_unretained ConsoleFaderView* fFader = _fxFader;
-    __unsafe_unretained ConsoleFaderView* mFader = _musicFader;
-    __unsafe_unretained ConsoleFaderView* mstFader = _masterFader;
+    // Responsive Auto-Sizing Block for DAW Rack and Status Bar
+    __unsafe_unretained NSScrollView* rScroll = _rackScrollView;
+    __unsafe_unretained RightMixerPaneView* rContent = _rackContentView;
     __unsafe_unretained NSView* sBar = _statusBar;
+    __unsafe_unretained NSView* mBar = _dawMenuBar;
+    NSArray<ProChannelStripView*>* stripsRef = _channelStrips;
 
     _rightPane.onLayoutSubviews = ^(NSRect bounds) {
+        CGFloat totalW = bounds.size.width;
         CGFloat totalH = bounds.size.height;
-        CGFloat faderTop = 158.0f;
-        CGFloat statusH = 32.0f;
-        CGFloat faderH = totalH - faderTop - statusH;
-        if (faderH < 300.0f) faderH = 300.0f;
+        CGFloat barH = 32.0f;
+        CGFloat statusH = 30.0f;
+        CGFloat rackH = totalH - barH - statusH;
+        if (rackH < 400.0f) rackH = 400.0f;
 
-        CGFloat faderW = 126.0f;
-        vFader.frame = NSMakeRect(14, faderTop, faderW, faderH);
-        fFader.frame = NSMakeRect(148, faderTop, faderW, faderH);
-        mFader.frame = NSMakeRect(282, faderTop, faderW, faderH);
-        mstFader.frame = NSMakeRect(416, faderTop, faderW, faderH);
+        mBar.frame = NSMakeRect(0, 0, totalW, barH);
+        sBar.frame = NSMakeRect(0, totalH - statusH, totalW, statusH);
+        rScroll.frame = NSMakeRect(0, barH, totalW, rackH);
 
-        sBar.frame = NSMakeRect(0, totalH - statusH, bounds.size.width, statusH);
+        CGFloat requiredW = 6.0f + stripsRef.count * (stripW + 6.0f) + 6.0f;
+        CGFloat contentW = MAX(totalW, requiredW);
+        rContent.frame = NSMakeRect(0, 0, contentW, rackH);
+
+        for (NSUInteger i = 0; i < stripsRef.count; ++i) {
+            ProChannelStripView* cs = stripsRef[i];
+            cs.frame = NSMakeRect(6.0f + i * (stripW + 6.0f), 2.0f, stripW, rackH - 4.0f);
+        }
     };
 
     [splitView addSubview:leftPane];
@@ -406,81 +498,24 @@
                                 _selectedInputDevice, _selectedBufferSize, latMs];
 }
 
-- (void)updatePresetHighlight:(NSInteger)selectedIndex {
-    for (NSUInteger i = 0; i < _presetButtons.count; ++i) {
-        NSButton* b = _presetButtons[i];
-        if ((NSInteger)i == selectedIndex) {
-            b.state = NSControlStateValueOn;
-            b.contentTintColor = PandaTheme::Cyan();
-        } else {
-            b.state = NSControlStateValueOff;
-            b.contentTintColor = [NSColor whiteColor];
-        }
-    }
-}
-
-- (void)toggleReverb:(NSButton*)sender {
-    if (_engine) _engine->setReverbEnabled(sender.state == NSControlStateValueOn);
-}
-
-- (void)toggleDelay:(NSButton*)sender {
-    if (_engine) _engine->setDelayEnabled(sender.state == NSControlStateValueOn);
-}
-
-- (void)toggleHarmoni:(NSButton*)sender {
-    if (_engine) _engine->setHarmonizerEnabled(sender.state == NSControlStateValueOn);
-}
-
-- (void)toggleSubBass:(NSButton*)sender {
-    if (_engine) _engine->setSubBoosterEnabled(sender.state == NSControlStateValueOn);
-}
-
-- (void)onPresetSelected:(NSButton*)sender {
+- (void)loadPresetByName:(NSString*)presetName {
     if (!_engine) return;
-    [self updatePresetHighlight:sender.tag];
-
-    switch (sender.tag) {
-        case 0:
-            _engine->loadFactoryPreset(OnLive::DSP::FactoryPreset::TalkChitChat);
-            _reverbBtn.state = NSControlStateValueOff;
-            _delayBtn.state = NSControlStateValueOff;
-            _harmoniBtn.state = NSControlStateValueOff;
-            _subBassBtn.state = NSControlStateValueOff;
-            break;
-        case 1:
-            _engine->loadFactoryPreset(OnLive::DSP::FactoryPreset::PopStudio);
-            _reverbBtn.state = NSControlStateValueOn;
-            _delayBtn.state = NSControlStateValueOn;
-            _harmoniBtn.state = NSControlStateValueOff;
-            _subBassBtn.state = NSControlStateValueOn;
-            break;
-        case 2:
-            _engine->loadFactoryPreset(OnLive::DSP::FactoryPreset::AcousticWarm);
-            _reverbBtn.state = NSControlStateValueOn;
-            _delayBtn.state = NSControlStateValueOff;
-            _harmoniBtn.state = NSControlStateValueOff;
-            _subBassBtn.state = NSControlStateValueOff;
-            break;
-        case 3:
-            _engine->loadFactoryPreset(OnLive::DSP::FactoryPreset::DangdutMelayu);
-            _reverbBtn.state = NSControlStateValueOn;
-            _delayBtn.state = NSControlStateValueOn;
-            _harmoniBtn.state = NSControlStateValueOff;
-            _subBassBtn.state = NSControlStateValueOn;
-            break;
-        case 4:
-            _engine->loadFactoryPreset(OnLive::DSP::FactoryPreset::ModernRnB);
-            _reverbBtn.state = NSControlStateValueOn;
-            _delayBtn.state = NSControlStateValueOn;
-            _harmoniBtn.state = NSControlStateValueOn;
-            _subBassBtn.state = NSControlStateValueOn;
-            break;
+    if ([presetName containsString:@"Pop"]) {
+        _engine->loadFactoryPreset(OnLive::DSP::FactoryPreset::PopStudio);
+    } else if ([presetName containsString:@"Akustik"]) {
+        _engine->loadFactoryPreset(OnLive::DSP::FactoryPreset::AcousticWarm);
+    } else if ([presetName containsString:@"Dangdut"]) {
+        _engine->loadFactoryPreset(OnLive::DSP::FactoryPreset::DangdutMelayu);
+    } else if ([presetName containsString:@"Talk"] || [presetName containsString:@"SAPA"]) {
+        _engine->loadFactoryPreset(OnLive::DSP::FactoryPreset::TalkChitChat);
+    } else {
+        _engine->loadFactoryPreset(OnLive::DSP::FactoryPreset::PopStudio);
     }
 
-    _vocalFader.volumeDb = _engine->getVocalChannel().getVolumeDb();
-    _fxFader.volumeDb = _engine->getFxChannel().getVolumeDb();
-    _musicFader.volumeDb = _engine->getMusicChannel().getVolumeDb();
-    _masterFader.volumeDb = _engine->getMasterChannel().getVolumeDb();
+    if (_vocalStrip && _vocalStrip.faderView) _vocalStrip.faderView.volumeDb = _engine->getVocalChannel().getVolumeDb();
+    if (_fxStrip && _fxStrip.faderView) _fxStrip.faderView.volumeDb = _engine->getFxChannel().getVolumeDb();
+    if (_musicStrip && _musicStrip.faderView) _musicStrip.faderView.volumeDb = _engine->getMusicChannel().getVolumeDb();
+    if (_masterStrip && _masterStrip.faderView) _masterStrip.faderView.volumeDb = _engine->getMasterChannel().getVolumeDb();
 }
 
 // ========================================================
@@ -716,12 +751,42 @@
     _keyLabel.stringValue = [NSString stringWithFormat:@"Key: %d", _currentKey];
 }
 
+- (void)selectChannelStrip:(ProChannelStripView*)targetStrip {
+    for (ProChannelStripView* cs in _channelStrips) {
+        cs.isSelected = (cs == targetStrip);
+    }
+}
+
+- (void)rescanHardwareDevices {
+    NSArray<NSString*>* inNames = [CoreAudioHALManager getAvailableInputNames];
+    NSArray<NSString*>* outNames = [CoreAudioHALManager getAvailableOutputNames];
+
+    if (_vocalStrip) [_vocalStrip updateAvailableInputs:inNames];
+    if (_fxStrip) [_fxStrip updateAvailableInputs:inNames];
+    if (_musicStrip) [_musicStrip updateAvailableInputs:inNames];
+    if (_masterStrip) [_masterStrip updateAvailableOutputs:outNames];
+
+    if (inNames.count > 0) {
+        _selectedInputDevice = inNames[0];
+    }
+    if (outNames.count > 0) {
+        _selectedOutputDevice = outNames[0];
+    }
+    [self updateStatusLabelText];
+    NSLog(@"[PandaQQ] Rescanned Hardware Devices: %lu inputs, %lu outputs", (unsigned long)inNames.count, (unsigned long)outNames.count);
+}
+
 - (void)updateMeters {
     if (!_engine) return;
-    [_vocalFader updateMeterDb:_engine->getVocalChannel().getPeakMeterDb()];
-    [_fxFader updateMeterDb:_engine->getFxChannel().getPeakMeterDb()];
-    [_musicFader updateMeterDb:_engine->getMusicChannel().getPeakMeterDb()];
-    [_masterFader updateMeterDb:_engine->getMasterChannel().getPeakMeterDb()];
+    float vDb = _engine->getVocalChannel().getPeakMeterDb();
+    float fDb = _engine->getFxChannel().getPeakMeterDb();
+    float mDb = _engine->getMusicChannel().getPeakMeterDb();
+    float mstDb = _engine->getMasterChannel().getPeakMeterDb();
+
+    if (_vocalStrip) [_vocalStrip setMeterLevelDb:vDb rms:vDb - 5.0f];
+    if (_fxStrip) [_fxStrip setMeterLevelDb:fDb rms:fDb - 5.0f];
+    if (_musicStrip) [_musicStrip setMeterLevelDb:mDb rms:mDb - 5.0f];
+    if (_masterStrip) [_masterStrip setMeterLevelDb:mstDb rms:mstDb - 5.0f];
 }
 
 - (void)showDonationAlert:(id)sender {

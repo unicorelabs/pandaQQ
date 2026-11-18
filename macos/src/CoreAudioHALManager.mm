@@ -49,8 +49,118 @@ static OSStatus audioOutputCallback(void* inRefCon,
     return noErr;
 }
 
+@implementation AudioHardwareDevice
+@end
+
 @implementation CoreAudioHALManager {
     AudioComponentInstance _outputUnit;
+}
+
++ (NSArray<AudioHardwareDevice*>*)scanAvailableDevices {
+    NSMutableArray<AudioHardwareDevice*>* list = [NSMutableArray array];
+    AudioObjectPropertyAddress addr = {
+        kAudioHardwarePropertyDevices,
+        kAudioObjectPropertyScopeGlobal,
+        kAudioObjectPropertyElementMaster
+    };
+
+    UInt32 dataSize = 0;
+    OSStatus status = AudioObjectGetPropertyDataSize(kAudioObjectSystemObject, &addr, 0, NULL, &dataSize);
+    if (status != noErr || dataSize == 0) return list;
+
+    UInt32 deviceCount = dataSize / sizeof(AudioDeviceID);
+    std::vector<AudioDeviceID> deviceIDs(deviceCount);
+    status = AudioObjectGetPropertyData(kAudioObjectSystemObject, &addr, 0, NULL, &dataSize, deviceIDs.data());
+    if (status != noErr) return list;
+
+    for (AudioDeviceID devID : deviceIDs) {
+        CFStringRef cfName = NULL;
+        UInt32 nameSize = sizeof(CFStringRef);
+        AudioObjectPropertyAddress nameAddr = {
+            kAudioDevicePropertyDeviceNameCFString,
+            kAudioObjectPropertyScopeGlobal,
+            kAudioObjectPropertyElementMaster
+        };
+        AudioObjectGetPropertyData(devID, &nameAddr, 0, NULL, &nameSize, &cfName);
+        NSString* name = cfName ? (__bridge_transfer NSString*)cfName : [NSString stringWithFormat:@"Device %u", (unsigned int)devID];
+
+        // Check Input Channels
+        AudioObjectPropertyAddress streamAddr = {
+            kAudioDevicePropertyStreamConfiguration,
+            kAudioDevicePropertyScopeInput,
+            kAudioObjectPropertyElementMaster
+        };
+        UInt32 bufListSize = 0;
+        int inCh = 0;
+        if (AudioObjectGetPropertyDataSize(devID, &streamAddr, 0, NULL, &bufListSize) == noErr && bufListSize > 0) {
+            std::vector<uint8_t> buffer(bufListSize);
+            AudioBufferList* bufList = (AudioBufferList*)buffer.data();
+            if (AudioObjectGetPropertyData(devID, &streamAddr, 0, NULL, &bufListSize, bufList) == noErr) {
+                for (UInt32 b = 0; b < bufList->mNumberBuffers; ++b) {
+                    inCh += bufList->mBuffers[b].mNumberChannels;
+                }
+            }
+        }
+
+        // Check Output Channels
+        streamAddr.mScope = kAudioDevicePropertyScopeOutput;
+        bufListSize = 0;
+        int outCh = 0;
+        if (AudioObjectGetPropertyDataSize(devID, &streamAddr, 0, NULL, &bufListSize) == noErr && bufListSize > 0) {
+            std::vector<uint8_t> buffer(bufListSize);
+            AudioBufferList* bufList = (AudioBufferList*)buffer.data();
+            if (AudioObjectGetPropertyData(devID, &streamAddr, 0, NULL, &bufListSize, bufList) == noErr) {
+                for (UInt32 b = 0; b < bufList->mNumberBuffers; ++b) {
+                    outCh += bufList->mBuffers[b].mNumberChannels;
+                }
+            }
+        }
+
+        if (inCh > 0 || outCh > 0) {
+            AudioHardwareDevice* dev = [[AudioHardwareDevice alloc] init];
+            dev.deviceID = devID;
+            dev.name = name;
+            dev.inputChannels = inCh;
+            dev.outputChannels = outCh;
+            dev.isInput = (inCh > 0);
+            dev.isOutput = (outCh > 0);
+            [list addObject:dev];
+        }
+    }
+
+    return list;
+}
+
++ (NSArray<NSString*>*)getAvailableInputNames {
+    NSMutableArray<NSString*>* names = [NSMutableArray array];
+    NSArray<AudioHardwareDevice*>* devs = [self scanAvailableDevices];
+    for (AudioHardwareDevice* d in devs) {
+        if (d.isInput) {
+            if (d.inputChannels >= 2) {
+                [names addObject:[NSString stringWithFormat:@"In 1 (%@)", d.name]];
+                [names addObject:[NSString stringWithFormat:@"In 2 (%@)", d.name]];
+                [names addObject:[NSString stringWithFormat:@"In 1-2 Stereo (%@)", d.name]];
+            } else {
+                [names addObject:[NSString stringWithFormat:@"In 1 (%@)", d.name]];
+            }
+        }
+    }
+    if (names.count == 0) {
+        [names addObject:@"Built-in Microphone (Mac)"];
+    }
+    return names;
+}
+
++ (NSArray<NSString*>*)getAvailableOutputNames {
+    NSMutableArray<NSString*>* names = [NSMutableArray array];
+    [names addObject:@"Master Main Mix"];
+    NSArray<AudioHardwareDevice*>* devs = [self scanAvailableDevices];
+    for (AudioHardwareDevice* d in devs) {
+        if (d.isOutput) {
+            [names addObject:[NSString stringWithFormat:@"Out (%@)", d.name]];
+        }
+    }
+    return names;
 }
 
 - (instancetype)initWithAudioEngine:(std::shared_ptr<OnLive::DSP::AudioEngine>)engine {

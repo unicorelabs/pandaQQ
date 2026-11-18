@@ -56,6 +56,8 @@ if(APPLE)
         macos/src/MainWindowController.mm
         macos/src/CoreAudioHALManager.mm
         macos/src/ConsoleFaderView.mm
+        macos/src/ProRotaryKnobView.mm
+        macos/src/ProChannelStripView.mm
     )
 
     add_executable(PandaQQ MACOSX_BUNDLE
