@@ -1,49 +1,6 @@
 #import "MainWindowController.h"
 #import "PandaTheme.h"
-
-@interface LEDMeterView : NSView
-@property (nonatomic, assign) float levelDb;
-@end
-
-@implementation LEDMeterView
-
-- (void)drawRect:(NSRect)dirtyRect {
-    [super drawRect:dirtyRect];
-
-    [[NSColor blackColor] setFill];
-    NSRectFill(self.bounds);
-
-    const int totalSegments = 16;
-    const float segHeight = (self.bounds.size.height - 4.0f) / totalSegments;
-    const float segWidth = self.bounds.size.width - 4.0f;
-
-    // Map -60dB .. 0dB to 0 .. 16
-    float norm = (self.levelDb + 60.0f) / 60.0f;
-    if (norm < 0.0f) norm = 0.0f;
-    if (norm > 1.0f) norm = 1.0f;
-    int litCount = (int)(norm * totalSegments);
-
-    for (int i = 0; i < totalSegments; ++i) {
-        NSRect r = NSMakeRect(2.0f, 2.0f + i * segHeight, segWidth, segHeight - 1.5f);
-        NSColor* c;
-        if (i >= 13) {
-            c = PandaTheme::Red();
-        } else if (i >= 9) {
-            c = PandaTheme::Amber();
-        } else {
-            c = PandaTheme::Green();
-        }
-
-        if (i < litCount) {
-            [c setFill];
-        } else {
-            [[c colorWithAlphaComponent:0.15f] setFill];
-        }
-        NSRectFill(r);
-    }
-}
-
-@end
+#import "ConsoleFaderView.h"
 
 @interface MainWindowController () {
     std::shared_ptr<OnLive::DSP::AudioEngine> _engine;
@@ -55,17 +12,11 @@
     int _currentKey;
     BOOL _isLiveLocked;
 
-    // Faders
-    NSSlider* _vocalSlider;
-    NSSlider* _fxSlider;
-    NSSlider* _musicSlider;
-    NSSlider* _masterSlider;
-
-    // Meters
-    LEDMeterView* _vocalMeter;
-    LEDMeterView* _fxMeter;
-    LEDMeterView* _musicMeter;
-    LEDMeterView* _masterMeter;
+    // Real Hardware Style Console Channel Strips
+    ConsoleFaderView* _vocalFader;
+    ConsoleFaderView* _fxFader;
+    ConsoleFaderView* _musicFader;
+    ConsoleFaderView* _masterFader;
 
     // Stompbox Buttons
     NSButton* _reverbBtn;
@@ -102,9 +53,9 @@
 
 - (void)setupUI {
     NSWindow* window = self.window;
-    window.title = @"Panda QQ - Live Karaoke Desktop DAW (macOS)";
+    window.title = @"Panda QQ - Live Karaoke Desktop DAW & Studio Console (macOS)";
     window.backgroundColor = PandaTheme::Background();
-    window.minSize = NSMakeSize(1024, 680);
+    window.minSize = NSMakeSize(1024, 700);
 
     NSView* root = window.contentView;
     root.wantsLayer = YES;
@@ -117,14 +68,14 @@
     [root addSubview:splitView];
 
     // ========================================================
-    // LEFT PANE: YOUTUBE KARAOKE PLAYER (60% Width)
+    // LEFT PANE: YOUTUBE KARAOKE PLAYER (Widescreen 16:9 View)
     // ========================================================
-    NSView* leftPane = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 760, 800)];
+    NSView* leftPane = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 740, 800)];
     leftPane.wantsLayer = YES;
     leftPane.layer.backgroundColor = PandaTheme::Background().CGColor;
 
     // Left Pane Header Bar
-    NSView* leftHeader = [[NSView alloc] initWithFrame:NSMakeRect(0, 740, 760, 60)];
+    NSView* leftHeader = [[NSView alloc] initWithFrame:NSMakeRect(0, 740, 740, 60)];
     leftHeader.wantsLayer = YES;
     leftHeader.layer.backgroundColor = PandaTheme::Chassis().CGColor;
     leftHeader.autoresizingMask = NSViewWidthSizable | NSViewMinYMargin;
@@ -141,7 +92,7 @@
     [leftHeader addSubview:titleLabel];
 
     // Search Field
-    _searchField = [[NSTextField alloc] initWithFrame:NSMakeRect(210, 14, 280, 30)];
+    _searchField = [[NSTextField alloc] initWithFrame:NSMakeRect(210, 14, 270, 30)];
     _searchField.placeholderString = @"Cari Lagu Karaoke YouTube...";
     _searchField.backgroundColor = [NSColor colorWithCalibratedWhite:0.15f alpha:1.0f];
     _searchField.textColor = [NSColor whiteColor];
@@ -151,7 +102,7 @@
     [leftHeader addSubview:_searchField];
 
     // Search Button
-    NSButton* searchBtn = [[NSButton alloc] initWithFrame:NSMakeRect(498, 14, 70, 30)];
+    NSButton* searchBtn = [[NSButton alloc] initWithFrame:NSMakeRect(488, 14, 70, 30)];
     searchBtn.title = @"Cari";
     searchBtn.bezelStyle = NSBezelStyleRounded;
     searchBtn.target = self;
@@ -159,14 +110,14 @@
     [leftHeader addSubview:searchBtn];
 
     // Key Transpose Controls
-    NSButton* keyDownBtn = [[NSButton alloc] initWithFrame:NSMakeRect(580, 14, 34, 30)];
+    NSButton* keyDownBtn = [[NSButton alloc] initWithFrame:NSMakeRect(570, 14, 34, 30)];
     keyDownBtn.title = @"-1";
     keyDownBtn.bezelStyle = NSBezelStyleRounded;
     keyDownBtn.target = self;
     keyDownBtn.action = @selector(onKeyDown:);
     [leftHeader addSubview:keyDownBtn];
 
-    _keyLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(618, 18, 56, 22)];
+    _keyLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(608, 18, 56, 22)];
     _keyLabel.stringValue = @"Key: 0";
     _keyLabel.font = [NSFont boldSystemFontOfSize:12];
     _keyLabel.textColor = PandaTheme::Amber();
@@ -176,7 +127,7 @@
     _keyLabel.editable = NO;
     [leftHeader addSubview:_keyLabel];
 
-    NSButton* keyUpBtn = [[NSButton alloc] initWithFrame:NSMakeRect(678, 14, 34, 30)];
+    NSButton* keyUpBtn = [[NSButton alloc] initWithFrame:NSMakeRect(668, 14, 34, 30)];
     keyUpBtn.title = @"+1";
     keyUpBtn.bezelStyle = NSBezelStyleRounded;
     keyUpBtn.target = self;
@@ -185,7 +136,7 @@
 
     // WKWebView for YouTube
     WKWebViewConfiguration* webConfig = [[WKWebViewConfiguration alloc] init];
-    _webView = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 760, 740) configuration:webConfig];
+    _webView = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 740, 740) configuration:webConfig];
     _webView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     _webView.navigationDelegate = self;
     [leftPane addSubview:_webView];
@@ -195,21 +146,21 @@
     [_webView loadRequest:[NSURLRequest requestWithURL:defaultUrl]];
 
     // ========================================================
-    // RIGHT PANE: DESKTOP AUDIO CONSOLE (40% Width)
+    // RIGHT PANE: PRO HARDWARE MIXING CONSOLE
     // ========================================================
-    NSView* rightPane = [[NSView alloc] initWithFrame:NSMakeRect(760, 0, 520, 800)];
+    NSView* rightPane = [[NSView alloc] initWithFrame:NSMakeRect(740, 0, 540, 800)];
     rightPane.wantsLayer = YES;
     rightPane.layer.backgroundColor = PandaTheme::Chassis().CGColor;
 
     // Right Header with Donation button
-    NSView* rightHeader = [[NSView alloc] initWithFrame:NSMakeRect(0, 740, 520, 60)];
+    NSView* rightHeader = [[NSView alloc] initWithFrame:NSMakeRect(0, 740, 540, 60)];
     rightHeader.wantsLayer = YES;
     rightHeader.layer.backgroundColor = PandaTheme::Background().CGColor;
     rightHeader.autoresizingMask = NSViewWidthSizable | NSViewMinYMargin;
     [rightPane addSubview:rightHeader];
 
-    NSTextField* mixerTitle = [[NSTextField alloc] initWithFrame:NSMakeRect(16, 16, 160, 26)];
-    mixerTitle.stringValue = @"PRO AUDIO CONSOLE";
+    NSTextField* mixerTitle = [[NSTextField alloc] initWithFrame:NSMakeRect(16, 16, 190, 26)];
+    mixerTitle.stringValue = @"PRO HARDWARE MIXER";
     mixerTitle.font = [NSFont boldSystemFontOfSize:13];
     mixerTitle.textColor = PandaTheme::Cyan();
     mixerTitle.backgroundColor = [NSColor clearColor];
@@ -218,7 +169,7 @@
     [rightHeader addSubview:mixerTitle];
 
     // Donation Button
-    NSButton* donateBtn = [[NSButton alloc] initWithFrame:NSMakeRect(360, 14, 140, 32)];
+    NSButton* donateBtn = [[NSButton alloc] initWithFrame:NSMakeRect(370, 14, 150, 32)];
     donateBtn.title = @"💖 Donasi E-Wallet";
     donateBtn.bezelStyle = NSBezelStyleRounded;
     donateBtn.contentTintColor = [NSColor whiteColor];
@@ -227,8 +178,8 @@
     [rightHeader addSubview:donateBtn];
 
     // 1-Tap Preset Bar
-    NSTextField* presetTitle = [[NSTextField alloc] initWithFrame:NSMakeRect(16, 700, 200, 20)];
-    presetTitle.stringValue = @"FACTORY PRESETS:";
+    NSTextField* presetTitle = [[NSTextField alloc] initWithFrame:NSMakeRect(16, 705, 200, 18)];
+    presetTitle.stringValue = @"FACTORY PRESETS (1-TAP):";
     presetTitle.font = [NSFont boldSystemFontOfSize:10];
     presetTitle.textColor = PandaTheme::TextMuted();
     presetTitle.bezeled = NO;
@@ -238,7 +189,7 @@
 
     NSArray* presets = @[@"🎤 SAPA", @"✨ POP", @"🎸 AKUSTIK", @"💃 DANGDUT", @"🔥 RNB"];
     for (NSUInteger i = 0; i < presets.count; ++i) {
-        NSButton* b = [[NSButton alloc] initWithFrame:NSMakeRect(16 + i * 98, 665, 92, 30)];
+        NSButton* b = [[NSButton alloc] initWithFrame:NSMakeRect(16 + i * 102, 672, 96, 28)];
         b.title = presets[i];
         b.tag = i;
         b.bezelStyle = NSBezelStyleRounded;
@@ -248,7 +199,7 @@
     }
 
     // Stompbox Quick FX Strip
-    NSTextField* stompTitle = [[NSTextField alloc] initWithFrame:NSMakeRect(16, 630, 200, 20)];
+    NSTextField* stompTitle = [[NSTextField alloc] initWithFrame:NSMakeRect(16, 642, 220, 18)];
     stompTitle.stringValue = @"QUICK SEND FX STOMPBOXES:";
     stompTitle.font = [NSFont boldSystemFontOfSize:10];
     stompTitle.textColor = PandaTheme::TextMuted();
@@ -257,41 +208,104 @@
     stompTitle.backgroundColor = [NSColor clearColor];
     [rightPane addSubview:stompTitle];
 
-    _reverbBtn = [self createStompbox:@"✨ REVERB" frame:NSMakeRect(16, 595, 115, 30) action:@selector(toggleReverb:)];
-    _delayBtn = [self createStompbox:@"🔁 DELAY" frame:NSMakeRect(140, 595, 115, 30) action:@selector(toggleDelay:)];
-    _harmoniBtn = [self createStompbox:@"👥 HARMONI" frame:NSMakeRect(264, 595, 115, 30) action:@selector(toggleHarmoni:)];
-    _subBassBtn = [self createStompbox:@"🔊 SUB BASS" frame:NSMakeRect(388, 595, 115, 30) action:@selector(toggleSubBass:)];
+    _reverbBtn = [self createStompbox:@"✨ REVERB" frame:NSMakeRect(16, 610, 120, 28) action:@selector(toggleReverb:)];
+    _delayBtn = [self createStompbox:@"🔁 DELAY" frame:NSMakeRect(144, 610, 120, 28) action:@selector(toggleDelay:)];
+    _harmoniBtn = [self createStompbox:@"👥 HARMONI" frame:NSMakeRect(272, 610, 120, 28) action:@selector(toggleHarmoni:)];
+    _subBassBtn = [self createStompbox:@"🔊 SUB BASS" frame:NSMakeRect(400, 610, 120, 28) action:@selector(toggleSubBass:)];
 
     [rightPane addSubview:_reverbBtn];
     [rightPane addSubview:_delayBtn];
     [rightPane addSubview:_harmoniBtn];
     [rightPane addSubview:_subBassBtn];
 
-    // 4 MAIN FADERS (Vocal, FX, Music, Master)
-    _vocalSlider = [self createFaderInView:rightPane x:40 label:@"VOKAL" accent:PandaTheme::Cyan() tag:0];
-    _fxSlider    = [self createFaderInView:rightPane x:160 label:@"EFEK" accent:PandaTheme::Purple() tag:1];
-    _musicSlider = [self createFaderInView:rightPane x:280 label:@"MUSIK" accent:PandaTheme::Amber() tag:2];
-    _masterSlider= [self createFaderInView:rightPane x:400 label:@"MASTER" accent:PandaTheme::Red() tag:3];
+    // ========================================================
+    // 4 REAL HARDWARE FADER CONSOLE STRIPS (VOKAL, EFEK, MUSIK, MASTER)
+    // ========================================================
+    const CGFloat startX = 16.0f;
+    const CGFloat faderW = 120.0f;
+    const CGFloat faderSpacing = 8.0f;
+    const CGFloat faderY = 46.0f;
+    const CGFloat faderH = 555.0f;
 
-    // Meters
-    _vocalMeter  = [[LEDMeterView alloc] initWithFrame:NSMakeRect(105, 160, 16, 360)];
-    _fxMeter     = [[LEDMeterView alloc] initWithFrame:NSMakeRect(225, 160, 16, 360)];
-    _musicMeter  = [[LEDMeterView alloc] initWithFrame:NSMakeRect(345, 160, 16, 360)];
-    _masterMeter = [[LEDMeterView alloc] initWithFrame:NSMakeRect(465, 160, 16, 360)];
+    __unsafe_unretained MainWindowController* weakSelf = self;
 
-    [rightPane addSubview:_vocalMeter];
-    [rightPane addSubview:_fxMeter];
-    [rightPane addSubview:_musicMeter];
-    [rightPane addSubview:_masterMeter];
+    // 1. VOKAL CHANNEL STRIP
+    _vocalFader = [[ConsoleFaderView alloc] initWithFrame:NSMakeRect(startX, faderY, faderW, faderH)
+                                             channelName:@"VOKAL"
+                                             accentColor:PandaTheme::Cyan()
+                                               initialDb:0.0f];
+    _vocalFader.autoresizingMask = NSViewMinYMargin | NSViewHeightSizable;
+    _vocalFader.onVolumeChanged = ^(float db) {
+        if (weakSelf && weakSelf->_engine) weakSelf->_engine->getVocalChannel().setVolumeDb(db);
+    };
+    _vocalFader.onMuteChanged = ^(BOOL muted) {
+        if (weakSelf && weakSelf->_engine) weakSelf->_engine->getVocalChannel().setMute(muted);
+    };
+    _vocalFader.onSoloChanged = ^(BOOL soloed) {
+        if (weakSelf && weakSelf->_engine) weakSelf->_engine->getVocalChannel().setSolo(soloed);
+    };
+    [rightPane addSubview:_vocalFader];
+
+    // 2. EFEK CHANNEL STRIP
+    _fxFader = [[ConsoleFaderView alloc] initWithFrame:NSMakeRect(startX + (faderW + faderSpacing) * 1, faderY, faderW, faderH)
+                                          channelName:@"EFEK"
+                                          accentColor:PandaTheme::Purple()
+                                            initialDb:0.0f];
+    _fxFader.autoresizingMask = NSViewMinYMargin | NSViewHeightSizable;
+    _fxFader.onVolumeChanged = ^(float db) {
+        if (weakSelf && weakSelf->_engine) weakSelf->_engine->getFxChannel().setVolumeDb(db);
+    };
+    _fxFader.onMuteChanged = ^(BOOL muted) {
+        if (weakSelf && weakSelf->_engine) weakSelf->_engine->getFxChannel().setMute(muted);
+    };
+    _fxFader.onSoloChanged = ^(BOOL soloed) {
+        if (weakSelf && weakSelf->_engine) weakSelf->_engine->getFxChannel().setSolo(soloed);
+    };
+    [rightPane addSubview:_fxFader];
+
+    // 3. MUSIK CHANNEL STRIP
+    _musicFader = [[ConsoleFaderView alloc] initWithFrame:NSMakeRect(startX + (faderW + faderSpacing) * 2, faderY, faderW, faderH)
+                                             channelName:@"MUSIK"
+                                             accentColor:PandaTheme::Amber()
+                                               initialDb:0.0f];
+    _musicFader.autoresizingMask = NSViewMinYMargin | NSViewHeightSizable;
+    _musicFader.onVolumeChanged = ^(float db) {
+        if (weakSelf && weakSelf->_engine) weakSelf->_engine->getMusicChannel().setVolumeDb(db);
+    };
+    _musicFader.onMuteChanged = ^(BOOL muted) {
+        if (weakSelf && weakSelf->_engine) weakSelf->_engine->getMusicChannel().setMute(muted);
+    };
+    _musicFader.onSoloChanged = ^(BOOL soloed) {
+        if (weakSelf && weakSelf->_engine) weakSelf->_engine->getMusicChannel().setSolo(soloed);
+    };
+    [rightPane addSubview:_musicFader];
+
+    // 4. MASTER CHANNEL STRIP
+    _masterFader = [[ConsoleFaderView alloc] initWithFrame:NSMakeRect(startX + (faderW + faderSpacing) * 3, faderY, faderW, faderH)
+                                              channelName:@"MASTER"
+                                              accentColor:PandaTheme::Red()
+                                                initialDb:0.0f];
+    _masterFader.autoresizingMask = NSViewMinYMargin | NSViewHeightSizable;
+    _masterFader.onVolumeChanged = ^(float db) {
+        if (weakSelf && weakSelf->_engine) weakSelf->_engine->getMasterChannel().setVolumeDb(db);
+    };
+    _masterFader.onMuteChanged = ^(BOOL muted) {
+        if (weakSelf && weakSelf->_engine) weakSelf->_engine->getMasterChannel().setMute(muted);
+    };
+    _masterFader.onSoloChanged = ^(BOOL soloed) {
+        if (weakSelf && weakSelf->_engine) weakSelf->_engine->getMasterChannel().setSolo(soloed);
+    };
+    [rightPane addSubview:_masterFader];
 
     // Status bar at bottom of right pane
-    NSView* statusBar = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 520, 36)];
+    NSView* statusBar = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 540, 36)];
     statusBar.wantsLayer = YES;
     statusBar.layer.backgroundColor = PandaTheme::Background().CGColor;
+    statusBar.autoresizingMask = NSViewWidthSizable;
     [rightPane addSubview:statusBar];
 
-    NSTextField* statusText = [[NSTextField alloc] initWithFrame:NSMakeRect(16, 8, 480, 20)];
-    statusText.stringValue = @"DSP Load: 1.24% • Sample Rate: 48.0 kHz • CoreAudio Low-Latency";
+    NSTextField* statusText = [[NSTextField alloc] initWithFrame:NSMakeRect(16, 8, 500, 20)];
+    statusText.stringValue = @"DSP Load: 1.24% • Sample Rate: 48.0 kHz • CoreAudio Low-Latency HAL";
     statusText.font = [NSFont systemFontOfSize:10];
     statusText.textColor = PandaTheme::TextMuted();
     statusText.bezeled = NO;
@@ -321,61 +335,6 @@
     return btn;
 }
 
-- (NSSlider*)createFaderInView:(NSView*)parent x:(CGFloat)x label:(NSString*)label accent:(NSColor*)color tag:(NSInteger)tag {
-    NSTextField* lbl = [[NSTextField alloc] initWithFrame:NSMakeRect(x, 535, 60, 20)];
-    lbl.stringValue = label;
-    lbl.font = [NSFont boldSystemFontOfSize:11];
-    lbl.textColor = color;
-    lbl.alignment = NSTextAlignmentCenter;
-    lbl.bezeled = NO;
-    lbl.editable = NO;
-    lbl.backgroundColor = [NSColor clearColor];
-    [parent addSubview:lbl];
-
-    NSSlider* slider = [[NSSlider alloc] initWithFrame:NSMakeRect(x + 15, 160, 30, 360)];
-    slider.vertical = YES;
-    slider.minValue = -48.0f;
-    slider.maxValue = 6.0f;
-    slider.floatValue = 0.0f;
-    slider.tag = tag;
-    slider.target = self;
-    slider.action = @selector(onFaderChanged:);
-    [parent addSubview:slider];
-
-    NSButton* muteBtn = [[NSButton alloc] initWithFrame:NSMakeRect(x, 115, 60, 26)];
-    muteBtn.title = @"MUTE";
-    muteBtn.bezelStyle = NSBezelStyleRounded;
-    [muteBtn setButtonType:NSButtonTypePushOnPushOff];
-    muteBtn.tag = tag;
-    muteBtn.target = self;
-    muteBtn.action = @selector(onMuteToggled:);
-    [parent addSubview:muteBtn];
-
-    return slider;
-}
-
-- (void)onFaderChanged:(NSSlider*)sender {
-    if (!_engine) return;
-    float db = sender.floatValue;
-    switch (sender.tag) {
-        case 0: _engine->getVocalChannel().setVolumeDb(db); break;
-        case 1: _engine->getFxChannel().setVolumeDb(db); break;
-        case 2: _engine->getMusicChannel().setVolumeDb(db); break;
-        case 3: _engine->getMasterChannel().setVolumeDb(db); break;
-    }
-}
-
-- (void)onMuteToggled:(NSButton*)sender {
-    if (!_engine) return;
-    bool isMuted = (sender.state == NSControlStateValueOn);
-    switch (sender.tag) {
-        case 0: _engine->getVocalChannel().setMute(isMuted); break;
-        case 1: _engine->getFxChannel().setMute(isMuted); break;
-        case 2: _engine->getMusicChannel().setMute(isMuted); break;
-        case 3: _engine->getMasterChannel().setMute(isMuted); break;
-    }
-}
-
 - (void)toggleReverb:(NSButton*)sender {
     if (_engine) _engine->setReverbEnabled(sender.state == NSControlStateValueOn);
 }
@@ -401,6 +360,10 @@
         case 3: _engine->loadFactoryPreset(OnLive::DSP::FactoryPreset::DangdutMelayu); break;
         case 4: _engine->loadFactoryPreset(OnLive::DSP::FactoryPreset::ModernRnB); break;
     }
+    _vocalFader.volumeDb = _engine->getVocalChannel().getVolumeDb();
+    _fxFader.volumeDb = _engine->getFxChannel().getVolumeDb();
+    _musicFader.volumeDb = _engine->getMusicChannel().getVolumeDb();
+    _masterFader.volumeDb = _engine->getMasterChannel().getVolumeDb();
 }
 
 - (void)onSearchEntered:(NSTextField*)sender {
@@ -431,15 +394,10 @@
 
 - (void)updateMeters {
     if (!_engine) return;
-    _vocalMeter.levelDb = _engine->getVocalChannel().getPeakMeterDb();
-    _fxMeter.levelDb = _engine->getFxChannel().getPeakMeterDb();
-    _musicMeter.levelDb = _engine->getMusicChannel().getPeakMeterDb();
-    _masterMeter.levelDb = _engine->getMasterChannel().getPeakMeterDb();
-
-    [_vocalMeter setNeedsDisplay:YES];
-    [_fxMeter setNeedsDisplay:YES];
-    [_musicMeter setNeedsDisplay:YES];
-    [_masterMeter setNeedsDisplay:YES];
+    [_vocalFader updateMeterDb:_engine->getVocalChannel().getPeakMeterDb()];
+    [_fxFader updateMeterDb:_engine->getFxChannel().getPeakMeterDb()];
+    [_musicFader updateMeterDb:_engine->getMusicChannel().getPeakMeterDb()];
+    [_masterFader updateMeterDb:_engine->getMasterChannel().getPeakMeterDb()];
 }
 
 - (void)showDonationAlert:(id)sender {
