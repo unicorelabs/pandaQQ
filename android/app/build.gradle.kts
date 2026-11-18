@@ -87,6 +87,6 @@ dependencies {
     implementation("androidx.compose.material3:material3")
 
     // Google Oboe (High Performance Low Latency Audio)
-    implementation("google.oboe:oboe:1.8.0")
+    implementation("com.google.oboe:oboe:1.9.0")
 }
 
