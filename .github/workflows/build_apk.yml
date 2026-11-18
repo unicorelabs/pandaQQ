@@ -1,4 +1,4 @@
-name: Panda QQ CI/CD & Automated APK Build
+name: Panda QQ CI/CD & Multiplatform Build
 
 on:
   push:
@@ -76,44 +76,86 @@ jobs:
       - name: Upload APK as Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PandaQQ-Debug-APK
+          name: PandaQQ-Android-APK
           path: output_apks/PandaQQ-v1.0.0-debug.apk
           retention-days: 14
 
   # ========================================================
-  # STAGE 3: AUTOMATED GITHUB RELEASES (Triggered on Tags)
+  # STAGE 3: COMPILE macOS DESKTOP APP
+  # ========================================================
+  build-macos:
+    name: Build macOS Desktop App
+    needs: test-dsp
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Ninja
+        run: brew install ninja
+
+      - name: Configure CMake
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build PandaQQ.app
+        run: cmake --build build --target PandaQQ
+
+      - name: Package App Bundle into Zip
+        run: |
+          cd build
+          mkdir -p PandaQQ.app/Contents/Resources
+          cp ../docs/panda_qq_icon.png PandaQQ.app/Contents/Resources/AppIcon.png || true
+          zip -r PandaQQ-macOS.zip PandaQQ.app
+
+      - name: Upload macOS App Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PandaQQ-macOS-Desktop
+          path: build/PandaQQ-macOS.zip
+          retention-days: 14
+
+  # ========================================================
+  # STAGE 4: AUTOMATED GITHUB RELEASES (Triggered on Tags)
   # ========================================================
   create-release:
     name: Publish GitHub Release
-    needs: build-apk
+    needs: [build-apk, build-macos]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download Built APK
+      - name: Download Android APK
         uses: actions/download-artifact@v4
         with:
-          name: PandaQQ-Debug-APK
+          name: PandaQQ-Android-APK
+          path: release_artifacts
+
+      - name: Download macOS App
+        uses: actions/download-artifact@v4
+        with:
+          name: PandaQQ-macOS-Desktop
           path: release_artifacts
 
       - name: Create Official GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: release_artifacts/PandaQQ-v1.0.0-debug.apk
+          files: |
+            release_artifacts/PandaQQ-v1.0.0-debug.apk
+            release_artifacts/PandaQQ-macOS.zip
           name: Panda QQ Release ${{ github.ref_name }}
           draft: false
           prerelease: false
           body: |
-            ## 🐼 Panda QQ - Live Karaoke Mobile DAW & Broadcast Suite (${{ github.ref_name }})
+            ## 🐼 Panda QQ - Live Karaoke Multiplatform Suite (${{ github.ref_name }})
             
-            ### 📱 Cara Instal:
-            1. Unduh file **`PandaQQ-v1.0.0-debug.apk`** di bawah ini langsung dari HP Android Anda.
-            2. Ketuk file yang telah diunduh, lalu pilih **Install**.
-            3. Jika ada peringatan keamanan, izinkan sekali (*Install from unknown source*).
-            4. Colokkan microphone dan soundcard OTG Anda, lalu nikmati siaran live karaoke dengan audio kelas studio!
+            ### 📥 Download Installer:
+            - 📱 **Android**: Unduh file **`PandaQQ-v1.0.0-debug.apk`** untuk smartphone Android.
+            - 🍏 **macOS**: Unduh file **`PandaQQ-macOS.zip`**, ekstrak dan jalankan **`PandaQQ.app`** di MacBook / Mac desktop Anda!
             
             ### 🚀 Fitur Unggulan Versi Ini:
-            - **Split Screen**: Layar YouTube Karaoke (16:9) + 4 Fader DAW Faders.
+            - **Multiplatform Support**: Android (Mobile 2-HP setup) dan macOS (Desktop Widescreen Studio).
+            - **Layar YouTube Karaoke 16:9** dengan pencarian cepat dan transpose nada (*Key Shifter*).
             - **Tombol Cepat Send FX**: Stompbox instan untuk `Reverb`, `Delay`, `Harmoni`, dan `Sub-Bass Booster`.
             - **Studio Insert Rack**: Noise Gate, De-Esser, 7-Band EQ, Opto Vocal Compressor, dan True-Peak Limiter (-1.0 dBTP).
             - **Auto-Carve**: Otomatis melubangi frekuensi musik YouTube saat vokal bernyanyi.

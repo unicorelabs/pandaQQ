@@ -37,3 +37,41 @@ target_link_libraries(stress_and_benchmark_test PRIVATE
     onlive_dsp
 )
 
+# ========================================================
+# macOS DESKTOP BUNDLE TARGET
+# ========================================================
+if(APPLE)
+    enable_language(OBJCXX)
+
+    set(MACOS_SOURCES
+        macos/src/main.mm
+        macos/src/AppDelegate.mm
+        macos/src/MainWindowController.mm
+        macos/src/CoreAudioHALManager.mm
+    )
+
+    add_executable(PandaQQ MACOSX_BUNDLE
+        ${MACOS_SOURCES}
+    )
+
+    set_target_properties(PandaQQ PROPERTIES
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/macos/Info.plist"
+        MACOSX_BUNDLE_BUNDLE_NAME "Panda QQ"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "com.pandaqq.desktop"
+        MACOSX_BUNDLE_BUNDLE_VERSION "1.0.0"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0.0"
+    )
+
+    target_include_directories(PandaQQ PRIVATE
+        macos/src
+        src/dsp/include
+    )
+
+    target_link_libraries(PandaQQ PRIVATE
+        onlive_dsp
+        "-framework Cocoa"
+        "-framework WebKit"
+        "-framework CoreAudio"
+        "-framework AudioToolbox"
+    )
+endif()
