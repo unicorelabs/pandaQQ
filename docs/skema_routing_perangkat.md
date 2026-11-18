@@ -84,3 +84,4 @@ flowchart TD
 4. **Langkah 4**: Buka aplikasi **TikTok** di HP 2 ➔ pilih **Go Live**.
    - Periksa ikon mikrofon eksternal di TikTok sudah aktif (bukan menggunakan mic internal HP 2).
 5. **Siaran Live Siap Dimulai!** Anda dapat bernyanyi dengan percaya diri dengan audio berstandar siaran studio profesional.
+

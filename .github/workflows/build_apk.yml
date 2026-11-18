@@ -1,15 +1,47 @@
-name: Build Panda QQ Android APK
+name: Panda QQ CI/CD & Automated APK Build
 
 on:
   push:
     branches: [ main, master ]
+    tags:
+      - 'v*'
   pull_request:
     branches: [ main, master ]
   workflow_dispatch: # Allows manual trigger from GitHub UI
 
 jobs:
-  build:
-    name: Build APK
+  # ========================================================
+  # STAGE 1: C++20 CORE DSP VERIFICATION & BENCHMARK
+  # ========================================================
+  test-dsp:
+    name: Verify C++ DSP Engine
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Build Tools
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build clang
+
+      - name: Configure CMake
+        run: cmake -B build -G Ninja -DCMAKE_CXX_COMPILER=clang++
+
+      - name: Build DSP Engine & Tests
+        run: cmake --build build
+
+      - name: Run Core DSP Unit Tests
+        run: ./build/test_dsp_engine
+
+      - name: Run Stress & Latency Benchmark
+        run: ./build/stress_and_benchmark_test
+
+  # ========================================================
+  # STAGE 2: COMPILE ANDROID APK
+  # ========================================================
+  build-apk:
+    name: Build Android APK
+    needs: test-dsp
     runs-on: ubuntu-latest
 
     steps:
@@ -29,17 +61,64 @@ jobs:
         run: |
           sdkmanager --install "ndk;26.1.10909125" "cmake;3.22.1"
 
-      - name: Make Gradle executable
+      - name: Make Gradle Executable
         run: chmod +x android/gradlew || true
 
       - name: Build Debug APK
         working-directory: android
         run: ./gradlew assembleDebug --stacktrace
 
-      - name: Upload Debug APK Artifact
+      - name: Rename APK for Clarity
+        run: |
+          mkdir -p output_apks
+          cp android/app/build/outputs/apk/debug/*.apk output_apks/PandaQQ-v1.0.0-debug.apk
+
+      - name: Upload APK as Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
           name: PandaQQ-Debug-APK
-          path: android/app/build/outputs/apk/debug/*.apk
+          path: output_apks/PandaQQ-v1.0.0-debug.apk
           retention-days: 14
 
+  # ========================================================
+  # STAGE 3: AUTOMATED GITHUB RELEASES (Triggered on Tags)
+  # ========================================================
+  create-release:
+    name: Publish GitHub Release
+    needs: build-apk
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download Built APK
+        uses: actions/download-artifact@v4
+        with:
+          name: PandaQQ-Debug-APK
+          path: release_artifacts
+
+      - name: Create Official GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release_artifacts/PandaQQ-v1.0.0-debug.apk
+          name: Panda QQ Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          body: |
+            ## 🐼 Panda QQ - Live Karaoke Mobile DAW & Broadcast Suite (${{ github.ref_name }})
+            
+            ### 📱 Cara Instal:
+            1. Unduh file **`PandaQQ-v1.0.0-debug.apk`** di bawah ini langsung dari HP Android Anda.
+            2. Ketuk file yang telah diunduh, lalu pilih **Install**.
+            3. Jika ada peringatan keamanan, izinkan sekali (*Install from unknown source*).
+            4. Colokkan microphone dan soundcard OTG Anda, lalu nikmati siaran live karaoke dengan audio kelas studio!
+            
+            ### 🚀 Fitur Unggulan Versi Ini:
+            - **Split Screen**: Layar YouTube Karaoke (16:9) + 4 Fader DAW Faders.
+            - **Tombol Cepat Send FX**: Stompbox instan untuk `Reverb`, `Delay`, `Harmoni`, dan `Sub-Bass Booster`.
+            - **Studio Insert Rack**: Noise Gate, De-Esser, 7-Band EQ, Opto Vocal Compressor, dan True-Peak Limiter (-1.0 dBTP).
+            - **Auto-Carve**: Otomatis melubangi frekuensi musik YouTube saat vokal bernyanyi.
+            
+            ### 💖 Donasi & Dukungan:
+            Dukung pengembang via DANA, GoPay, OVO ke nomor: **082116929992**
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
