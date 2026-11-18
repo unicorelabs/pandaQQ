@@ -54,3 +54,4 @@ typedef NS_ENUM(NSInteger, ProChannelStripType) {
 - (void)setMeterLevelDb:(float)peakDb rms:(float)rmsDb;
 
 @end
+

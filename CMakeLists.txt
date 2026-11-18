@@ -87,5 +87,6 @@ if(APPLE)
         "-framework WebKit"
         "-framework CoreAudio"
         "-framework AudioToolbox"
+        "-framework AVFoundation"
     )
 endif()

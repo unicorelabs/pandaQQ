@@ -2,6 +2,7 @@
 #import <Foundation/Foundation.h>
 #import <CoreAudio/CoreAudio.h>
 #import <AudioToolbox/AudioToolbox.h>
+#import <AVFoundation/AVFoundation.h>
 #include "AudioEngine.hpp"
 #include <memory>
 
@@ -19,14 +20,22 @@
 @property (nonatomic, readonly) BOOL isRunning;
 @property (nonatomic, assign) float sampleRate;
 @property (nonatomic, assign) std::shared_ptr<OnLive::DSP::AudioEngine> audioEngine;
+@property (nonatomic, assign) BOOL testToneEnabled;
+@property (nonatomic, copy) NSString* activeInputDeviceName;
+@property (nonatomic, copy) NSString* activeOutputDeviceName;
 
 - (instancetype)initWithAudioEngine:(std::shared_ptr<OnLive::DSP::AudioEngine>)engine;
 - (BOOL)start;
 - (void)stop;
 
++ (void)requestMicrophonePermission:(void (^)(BOOL granted))completion;
 + (NSArray<AudioHardwareDevice*>*)scanAvailableDevices;
 + (NSArray<NSString*>*)getAvailableInputNames;
 + (NSArray<NSString*>*)getAvailableOutputNames;
+
+- (void)selectInputDeviceByName:(NSString*)name;
+- (void)selectOutputDeviceByName:(NSString*)name;
+- (void)toggleTestTone;
 
 - (float)getVocalMeterDb;
 - (float)getMusicMeterDb;
