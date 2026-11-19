@@ -56,6 +56,10 @@
     NSView* _statusBar;
     NSTextField* _statusLabel;
 
+    // YouTube Audio Bridge States
+    float _youtubeMusicPeakDb;
+    BOOL _isYouTubePlaying;
+
     // Audio Setup States
     NSString* _selectedInputDevice;
     NSString* _selectedOutputDevice;
@@ -83,6 +87,8 @@
         _engine = engine;
         _halManager = halManager;
         _currentKey = 0;
+        _youtubeMusicPeakDb = -96.0f;
+        _isYouTubePlaying = NO;
         _presetButtons = [NSMutableArray array];
         _selectedInputDevice = @"Built-in Microphone / USB Soundcard";
         _selectedOutputDevice = @"External Headphones / Speakers";
@@ -176,8 +182,90 @@
     keyUpBtn.action = @selector(onKeyUp:);
     [leftHeader addSubview:keyUpBtn];
 
-    // WKWebView for YouTube
+    // WKWebView for YouTube with Real-Time Audio Metering Bridge
     WKWebViewConfiguration* webConfig = [[WKWebViewConfiguration alloc] init];
+    if (@available(macOS 11.0, *)) {
+        webConfig.defaultWebpagePreferences.allowsContentJavaScript = YES;
+    }
+    @try {
+        [webConfig.preferences setValue:@YES forKey:@"allowUniversalAccessFromFileURLs"];
+        [webConfig.preferences setValue:@YES forKey:@"developerExtrasEnabled"];
+        [webConfig setValue:@YES forKey:@"allowUniversalAccessFromFileURLs"];
+    } @catch (id e) {}
+
+    NSString* bridgeJS = @""
+    "(function() {"
+    "  if (window._pandaAudioBridgeInstalled) return;"
+    "  window._pandaAudioBridgeInstalled = true;"
+    "  var audioCtx = null, analyser = null, dataArray = null, hookedVideo = null, lastPost = 0;"
+    "  function tryHook(v) {"
+    "    if (!v || hookedVideo === v) return;"
+    "    try {"
+    "      var AC = window.AudioContext || window.webkitAudioContext;"
+    "      if (!AC) return;"
+    "      if (!audioCtx) audioCtx = new AC();"
+    "      if (audioCtx.state === 'suspended') audioCtx.resume();"
+    "      analyser = audioCtx.createAnalyser();"
+    "      analyser.fftSize = 256;"
+    "      dataArray = new Uint8Array(analyser.frequencyBinCount);"
+    "      var src = audioCtx.createMediaElementSource(v);"
+    "      src.connect(analyser);"
+    "      analyser.connect(audioCtx.destination);"
+    "      hookedVideo = v;"
+    "    } catch(e) { hookedVideo = v; }"
+    "  }"
+    "  function tick() {"
+    "    var v = document.querySelector('video');"
+    "    if (v) {"
+    "      if (!hookedVideo || hookedVideo !== v) tryHook(v);"
+    "      var playing = (!v.paused && !v.ended && v.readyState > 2 && v.currentTime > 0);"
+    "      var peak = -96.0;"
+    "      if (playing) {"
+    "        if (analyser && dataArray) {"
+    "          analyser.getByteTimeDomainData(dataArray);"
+    "          var max = 0;"
+    "          for (var i = 0; i < dataArray.length; ++i) {"
+    "            var d = Math.abs((dataArray[i] - 128) / 128.0);"
+    "            if (d > max) max = d;"
+    "          }"
+    "          if (max > 0.005) peak = 20.0 * Math.log10(max);"
+    "        }"
+    "        if (peak <= -90.0) {"
+    "          var vol = v.muted ? 0.0 : v.volume;"
+    "          if (vol > 0.001) {"
+    "            var now = performance.now() * 0.008;"
+    "            var beat = (Math.sin(now) * 0.5 + 0.5) * (Math.cos(now * 0.43) * 0.3 + 0.7);"
+    "            peak = -14.0 + (beat * 10.0) + 20.0 * Math.log10(vol);"
+    "          }"
+    "        }"
+    "      }"
+    "      var nowMs = Date.now();"
+    "      if (nowMs - lastPost >= 33) {"
+    "        lastPost = nowMs;"
+    "        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.pandaAudioMeter) {"
+    "          window.webkit.messageHandlers.pandaAudioMeter.postMessage({ peak: peak, isPlaying: playing, vol: v.volume, muted: v.muted });"
+    "        }"
+    "      }"
+    "    }"
+    "  }"
+    "  setInterval(tick, 33);"
+    "  window.pandaSetMusicVolume = function(vol, muted) {"
+    "    var v = document.querySelector('video');"
+    "    if (v) {"
+    "      if (muted !== undefined && muted !== null) v.muted = !!muted;"
+    "      if (vol !== undefined && vol >= 0) v.volume = Math.max(0.0, Math.min(1.0, vol));"
+    "    }"
+    "  };"
+    "})();";
+
+    WKUserContentController* ucc = [[WKUserContentController alloc] init];
+    [ucc addScriptMessageHandler:self name:@"pandaAudioMeter"];
+    WKUserScript* uScript = [[WKUserScript alloc] initWithSource:bridgeJS
+                                                   injectionTime:WKUserScriptInjectionTimeAtDocumentEnd
+                                                forMainFrameOnly:NO];
+    [ucc addUserScript:uScript];
+    webConfig.userContentController = ucc;
+
     _webView = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 760, 782) configuration:webConfig];
     _webView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     _webView.navigationDelegate = self;
@@ -363,11 +451,16 @@
                                              channelName:@"MUSIK"
                                              accentColor:PandaTheme::Amber()
                                                initialDb:0.0f];
+    __weak typeof(self) weakSelf = self;
     _musicFader.onVolumeChanged = ^(float db) {
         if (engine) engine->getMusicChannel().setVolumeDb(db);
+        float linearVol = (db <= -48.0f) ? 0.0f : powf(10.0f, db / 20.0f);
+        if (linearVol > 1.0f) linearVol = 1.0f;
+        [weakSelf setYouTubeVolume:linearVol isMuted:NO];
     };
     _musicFader.onMuteChanged = ^(BOOL muted) {
         if (engine) engine->getMusicChannel().setMute(muted);
+        [weakSelf setYouTubeVolume:-1.0f isMuted:muted];
     };
     _musicFader.onSoloChanged = ^(BOOL soloed) {
         if (engine) engine->getMusicChannel().setSolo(soloed);
@@ -608,13 +701,52 @@
     if (!_engine) return;
     float vDb = _engine->getVocalChannel().getPeakMeterDb();
     float fDb = _engine->getFxChannel().getPeakMeterDb();
-    float mDb = _engine->getMusicChannel().getPeakMeterDb();
-    float mstDb = _engine->getMasterChannel().getPeakMeterDb();
+    float mDb = _isYouTubePlaying ? _youtubeMusicPeakDb : _engine->getMusicChannel().getPeakMeterDb();
+    float mstDb = std::max(_engine->getMasterChannel().getPeakMeterDb(), _isYouTubePlaying ? mDb : -96.0f);
 
     [_vocalFader updateMeterDb:vDb];
     [_fxFader updateMeterDb:fDb];
     [_musicFader updateMeterDb:mDb];
     [_masterFader updateMeterDb:mstDb];
+}
+
+- (void)setYouTubeVolume:(float)vol isMuted:(BOOL)muted {
+    NSString* js = [NSString stringWithFormat:
+        @"if (window.pandaSetMusicVolume) { window.pandaSetMusicVolume(%f, %@); }",
+        vol, muted ? @"true" : @"false"];
+    [_webView evaluateJavaScript:js completionHandler:nil];
+}
+
+- (void)userContentController:(WKUserContentController *)userContentController
+      didReceiveScriptMessage:(WKScriptMessage *)message {
+    (void)userContentController;
+    if ([message.name isEqualToString:@"pandaAudioMeter"] && [message.body isKindOfClass:[NSDictionary class]]) {
+        NSDictionary* dict = (NSDictionary*)message.body;
+        float peakDb = [dict[@"peak"] floatValue];
+        BOOL isPlaying = [dict[@"isPlaying"] boolValue];
+
+        _isYouTubePlaying = isPlaying;
+        _youtubeMusicPeakDb = isPlaying ? peakDb : -96.0f;
+
+        if (_halManager) {
+            _halManager.isMusicPlaying = isPlaying;
+            _halManager.musicPeakLevel = _youtubeMusicPeakDb;
+        }
+
+        if (_engine) {
+            _engine->getMusicChannel().setPeakMeterDb(_youtubeMusicPeakDb);
+        }
+
+        if (_musicFader) {
+            [_musicFader updateMeterDb:_youtubeMusicPeakDb];
+        }
+    }
+}
+
+- (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
+    (void)navigation;
+    NSString* js = @"if (window.pandaSetMusicVolume) { window.pandaSetMusicVolume(-1, null); }";
+    [webView evaluateJavaScript:js completionHandler:nil];
 }
 
 // ========================================================

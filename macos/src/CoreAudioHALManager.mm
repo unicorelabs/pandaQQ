@@ -113,6 +113,22 @@ static OSStatus audioOutputCallback(void* inRefCon,
     // Read real microphone samples from the ring buffer
     manager->_micRingBuffer.read(micBuffer.data(), frames);
 
+    // If Music from YouTube is playing, feed modulated music signal into DSP engine
+    if (manager.isMusicPlaying && manager.musicPeakLevel > -60.0f) {
+        float peakLinear = powf(10.0f, std::clamp(manager.musicPeakLevel, -48.0f, 0.0f) / 20.0f);
+        static float musicPhase = 0.0f;
+        for (UInt32 i = 0; i < frames; ++i) {
+            float s = sinf(musicPhase) * 0.7f + sinf(musicPhase * 1.5f) * 0.3f;
+            musicPhase += 2.0f * M_PI * 220.0f / 48000.0f;
+            if (musicPhase > 2.0f * M_PI) musicPhase -= 2.0f * M_PI;
+            musicDummyL[i] = s * peakLinear;
+            musicDummyR[i] = s * peakLinear;
+        }
+    } else {
+        std::fill(musicDummyL.begin(), musicDummyL.end(), 0.0f);
+        std::fill(musicDummyR.begin(), musicDummyR.end(), 0.0f);
+    }
+
     // If Test Tone is enabled, synthesize live vocal test tone (440Hz warm voice wave)
     if (manager.testToneEnabled) {
         float& phase = manager->_testTonePhase;

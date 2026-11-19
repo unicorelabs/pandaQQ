@@ -110,6 +110,10 @@ public:
         return m_peakHoldDb.load(std::memory_order_relaxed);
     }
 
+    void setPeakMeterDb(float peakDb) noexcept {
+        m_peakMeterDb.store(peakDb, std::memory_order_relaxed);
+    }
+
     void decayPeakHold(float decayAmountDb) noexcept {
         float hold = m_peakHoldDb.load(std::memory_order_relaxed);
         hold = std::max(-96.0f, hold - decayAmountDb);

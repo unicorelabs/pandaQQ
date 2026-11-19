@@ -5,7 +5,7 @@
 #import "CoreAudioHALManager.h"
 #include <memory>
 
-@interface MainWindowController : NSWindowController <WKNavigationDelegate>
+@interface MainWindowController : NSWindowController <WKNavigationDelegate, WKScriptMessageHandler>
 
 - (instancetype)initWithAudioEngine:(std::shared_ptr<OnLive::DSP::AudioEngine>)engine
                          halManager:(CoreAudioHALManager*)halManager;

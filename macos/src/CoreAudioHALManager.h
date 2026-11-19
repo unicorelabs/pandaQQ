@@ -21,6 +21,8 @@
 @property (nonatomic, assign) float sampleRate;
 @property (nonatomic, assign) std::shared_ptr<OnLive::DSP::AudioEngine> audioEngine;
 @property (nonatomic, assign) BOOL testToneEnabled;
+@property (nonatomic, assign) BOOL isMusicPlaying;
+@property (nonatomic, assign) float musicPeakLevel;
 @property (nonatomic, copy) NSString* activeInputDeviceName;
 @property (nonatomic, copy) NSString* activeOutputDeviceName;
 
